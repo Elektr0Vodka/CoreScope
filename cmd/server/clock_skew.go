@@ -16,13 +16,23 @@ const (
 	SkewWarning  SkewSeverity = "warning"  // 5 min – 1 hour
 	SkewCritical SkewSeverity = "critical" // 1 hour – 30 days
 	SkewAbsurd   SkewSeverity = "absurd"   // > 30 days
+	SkewNoClock  SkewSeverity = "no_clock" // > 365 days — uninitialized RTC
 )
 
 // Default thresholds in seconds.
 const (
-	skewThresholdWarnSec     = 5 * 60        // 5 minutes
-	skewThresholdCriticalSec = 60 * 60       // 1 hour
-	skewThresholdAbsurdSec   = 30 * 24 * 3600 // 30 days
+	skewThresholdWarnSec     = 5 * 60          // 5 minutes
+	skewThresholdCriticalSec = 60 * 60         // 1 hour
+	skewThresholdAbsurdSec   = 30 * 24 * 3600  // 30 days
+	skewThresholdNoClockSec  = 365 * 24 * 3600 // 365 days — uninitialized RTC
+
+	// minDriftSamples is the minimum number of advert transmissions needed
+	// to compute a meaningful linear drift rate.
+	minDriftSamples = 5
+
+	// maxReasonableDriftPerDay caps drift display. Physically impossible
+	// drift rates (> 1 day/day) indicate insufficient or outlier samples.
+	maxReasonableDriftPerDay = 86400.0
 )
 
 // classifySkew maps absolute skew (seconds) to a severity level.
@@ -30,6 +40,8 @@ const (
 // and thresholds are integer multiples of 60 — no rounding artifacts.
 func classifySkew(absSkewSec float64) SkewSeverity {
 	switch {
+	case absSkewSec >= skewThresholdNoClockSec:
+		return SkewNoClock
 	case absSkewSec >= skewThresholdAbsurdSec:
 		return SkewAbsurd
 	case absSkewSec >= skewThresholdCriticalSec:
@@ -70,6 +82,15 @@ type NodeClockSkew struct {
 	Calibrated      bool         `json:"calibrated"`      // true if observer calibration was applied
 	LastAdvertTS    int64        `json:"lastAdvertTS"`     // most recent advert timestamp
 	LastObservedTS  int64        `json:"lastObservedTS"`   // most recent observation timestamp
+	Samples         []SkewSample `json:"samples,omitempty"` // time-series for sparklines
+	NodeName        string       `json:"nodeName,omitempty"` // populated in fleet responses
+	NodeRole        string       `json:"nodeRole,omitempty"` // populated in fleet responses
+}
+
+// SkewSample is a single (timestamp, skew) point for sparkline rendering.
+type SkewSample struct {
+	Timestamp int64   `json:"ts"`   // Unix epoch of observation
+	SkewSec   float64 `json:"skew"` // corrected skew in seconds
 }
 
 // txSkewResult maps tx hash → per-transmission skew stats. This is an
@@ -399,7 +420,24 @@ func (s *PacketStore) getNodeClockSkewLocked(pubkey string) *NodeClockSkew {
 	medSkew := median(allSkews)
 	meanSkew := mean(allSkews)
 	absMedian := math.Abs(medSkew)
-	drift := computeDrift(tsSkews)
+	severity := classifySkew(absMedian)
+
+	// For no_clock nodes (uninitialized RTC), skip drift — data is meaningless.
+	var drift float64
+	if severity != SkewNoClock && len(tsSkews) >= minDriftSamples {
+		drift = computeDrift(tsSkews)
+		// Cap physically impossible drift rates.
+		if math.Abs(drift) > maxReasonableDriftPerDay {
+			drift = 0
+		}
+	}
+
+	// Build sparkline samples from tsSkews (sorted by time).
+	sort.Slice(tsSkews, func(i, j int) bool { return tsSkews[i].ts < tsSkews[j].ts })
+	samples := make([]SkewSample, len(tsSkews))
+	for i, p := range tsSkews {
+		samples[i] = SkewSample{Timestamp: p.ts, SkewSec: round(p.skew, 1)}
+	}
 
 	return &NodeClockSkew{
 		Pubkey:         pubkey,
@@ -407,12 +445,44 @@ func (s *PacketStore) getNodeClockSkewLocked(pubkey string) *NodeClockSkew {
 		MedianSkewSec:  round(medSkew, 1),
 		LastSkewSec:    round(lastSkew, 1),
 		DriftPerDaySec: round(drift, 2),
-		Severity:       classifySkew(absMedian),
+		Severity:       severity,
 		SampleCount:    totalSamples,
 		Calibrated:     anyCal,
 		LastAdvertTS:   lastAdvTS,
 		LastObservedTS: lastObsTS,
+		Samples:        samples,
 	}
+}
+
+// GetFleetClockSkew returns clock skew data for all nodes that have skew data.
+// Must NOT be called with s.mu held.
+func (s *PacketStore) GetFleetClockSkew() []*NodeClockSkew {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	// Build name/role lookup from DB cache (requires s.mu held).
+	allNodes, _ := s.getCachedNodesAndPM()
+	nameMap := make(map[string]nodeInfo, len(allNodes))
+	for _, ni := range allNodes {
+		nameMap[ni.PublicKey] = ni
+	}
+
+	var results []*NodeClockSkew
+	for pubkey := range s.byNode {
+		cs := s.getNodeClockSkewLocked(pubkey)
+		if cs == nil {
+			continue
+		}
+		// Enrich with node name/role.
+		if ni, ok := nameMap[pubkey]; ok {
+			cs.NodeName = ni.Name
+			cs.NodeRole = ni.Role
+		}
+		// Omit samples in fleet response (too much data).
+		cs.Samples = nil
+		results = append(results, cs)
+	}
+	return results
 }
 
 // GetObserverCalibrations returns the current observer clock offsets.
