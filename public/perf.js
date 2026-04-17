@@ -6,8 +6,23 @@
 
   // --- History ring buffer (1 hour at 5 s intervals) ---
   const MAX_SAMPLES = 720;
+  const HISTORY_KEY = 'cs-perf-history';
   const history = [];
   const TIMEFRAME_SAMPLES = { '5m': 60, '15m': 180, '30m': 360, '1h': 720 };
+
+  // Restore history from sessionStorage so a page refresh doesn't lose the buffer.
+  // Entries older than 1 hour are pruned on load.
+  (function restoreHistory() {
+    try {
+      const raw = sessionStorage.getItem(HISTORY_KEY);
+      if (!raw) return;
+      const saved = JSON.parse(raw);
+      const cutoff = Date.now() - 3600000;
+      const fresh = saved.filter(function (s) { return s.ts > cutoff; });
+      var slice = fresh.slice(-MAX_SAMPLES);
+      for (var i = 0; i < slice.length; i++) history.push(slice[i]);
+    } catch (e) { /* quota or parse error — start fresh */ }
+  }());
 
   // --- View state (persisted across navigations) ---
   let viewMode  = localStorage.getItem('perf-view')      || 'cards';
@@ -42,6 +57,7 @@
       dbSizeMB:     sq ? +sq.dbSizeMB                  : null,
     });
     if (history.length > MAX_SAMPLES) history.shift();
+    try { sessionStorage.setItem(HISTORY_KEY, JSON.stringify(history)); } catch (e) { /* quota */ }
   }
 
   function getSlice() {
