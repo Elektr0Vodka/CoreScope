@@ -52,6 +52,6 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            APP_VERSION=${{ github.sha }}
+            APP_VERSION=${{ github.ref_name }}
             GIT_COMMIT=${{ github.sha }}
             BUILD_TIME=${{ steps.vars.outputs.BUILD_TIME }}
