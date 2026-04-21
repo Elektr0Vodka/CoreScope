@@ -28,7 +28,7 @@
 
   function barChart(data, labels, colors, w = 800, h = 220, pad = 40) {
     const max = Math.max(...data, 1);
-    const barW = Math.min((w - pad * 2) / data.length - 2, 30);
+    const barW = Math.max(1, Math.min((w - pad * 2) / data.length - 2, 30));
     let svg = `<svg viewBox="0 0 ${w} ${h}" style="width:100%;max-height:${h}px" role="img" aria-label="Bar chart showing data distribution"><title>Bar chart showing data distribution</title>`;
     // Grid
     for (let i = 0; i <= 4; i++) {
@@ -263,7 +263,25 @@
       <div class="analytics-row">
         <div class="analytics-card flex-1">
           <h3>📈 Packets / Hour</h3>
-          ${barChart(rf.packetsPerHour.map(h=>h.count), rf.packetsPerHour.map(h=>h.hour.slice(11)+'h'), 'var(--accent)')}
+          ${(() => {
+            const pph = rf.packetsPerHour;
+            const counts = pph.map(h => h.count);
+            // Decimate x-axis labels to avoid overlap
+            const totalHours = pph.length;
+            // Pick label interval: <=24h show every 6h, <=72h every 12h, else every 24h
+            const labelInterval = totalHours <= 24 ? 6 : totalHours <= 72 ? 12 : 24;
+            const labels = pph.map((h, i) => {
+              const hh = h.hour.slice(11, 13); // "HH"
+              const hourNum = parseInt(hh, 10);
+              if (hourNum % labelInterval === 0) {
+                // For multi-day ranges, show date on 00h boundaries
+                if (totalHours > 48 && hourNum === 0) return h.hour.slice(5, 10);
+                return hh + 'h';
+              }
+              return ''; // skip label
+            });
+            return barChart(counts, labels, 'var(--accent)');
+          })()}
         </div>
       </div>
 
@@ -624,14 +642,13 @@
     if (!data || !data.rings.length) return '<div class="text-muted">No path data for this observer</div>';
     let html = `<div class="reach-rings">`;
     data.rings.forEach(ring => {
-      const opacity = Math.max(0.3, 1 - ring.hops * 0.06);
       const nodeLinks = ring.nodes.slice(0, 8).map(n => {
         const label = n.name ? `<a href="#/nodes/${encodeURIComponent(n.pubkey)}" class="analytics-link">${esc(n.name)}</a>` : `<span class="mono">${n.hop}</span>`;
         const detail = n.distRange ? ` <span class="text-muted">(${n.distRange})</span>` : '';
         return label + detail;
       }).join(', ');
       const extra = ring.nodes.length > 8 ? ` <span class="text-muted">+${ring.nodes.length - 8} more</span>` : '';
-      html += `<div class="reach-ring" style="opacity:${opacity}">
+      html += `<div class="reach-ring">
         <div class="reach-hop">${ring.hops} hop${ring.hops > 1 ? 's' : ''}</div>
         <div class="reach-nodes">${nodeLinks}${extra}</div>
         <div class="reach-count">${ring.nodes.length} node${ring.nodes.length > 1 ? 's' : ''}</div>
@@ -675,7 +692,6 @@
     });
     let html = '<div class="reach-rings">';
     Object.entries(byDist).sort((a, b) => +a[0] - +b[0]).forEach(([dist, nodes]) => {
-      const opacity = Math.max(0.3, 1 - (+dist) * 0.06);
       const nodeLinks = nodes.slice(0, 10).map(n => {
         const label = n.name
           ? `<a href="#/nodes/${encodeURIComponent(n.pubkey)}" class="analytics-link">${esc(n.name)}</a>`
@@ -683,7 +699,7 @@
         return label + ` <span class="text-muted">via ${esc(n.observer_name)}</span>`;
       }).join(', ');
       const extra = nodes.length > 10 ? ` <span class="text-muted">+${nodes.length - 10} more</span>` : '';
-      html += `<div class="reach-ring" style="opacity:${opacity}">
+      html += `<div class="reach-ring">
         <div class="reach-hop">${dist} hop${+dist > 1 ? 's' : ''}</div>
         <div class="reach-nodes">${nodeLinks}${extra}</div>
         <div class="reach-count">${nodes.length} node${nodes.length > 1 ? 's' : ''}</div>
@@ -840,29 +856,44 @@
     }
   }
 
+  var CHANNEL_TIMELINE_MAX_SERIES = 8;
+
   function renderChannelTimeline(data) {
     if (!data.length) return '<div class="text-muted">No data</div>';
     var hours = []; var hourSet = {};
     var channelList = []; var channelSet = {};
     var lookup = {};
-    var maxCount = 1;
+    var channelVolume = {};
     for (var i = 0; i < data.length; i++) {
       var d = data[i];
       if (!hourSet[d.hour]) { hourSet[d.hour] = 1; hours.push(d.hour); }
       if (!channelSet[d.channel]) { channelSet[d.channel] = 1; channelList.push(d.channel); }
       lookup[d.hour + '|' + d.channel] = d.count;
-      if (d.count > maxCount) maxCount = d.count;
+      channelVolume[d.channel] = (channelVolume[d.channel] || 0) + d.count;
     }
     hours.sort();
+    // Sort channels by total volume descending, cap to top N
+    channelList.sort(function(a, b) { return channelVolume[b] - channelVolume[a]; });
+    var hiddenCount = Math.max(0, channelList.length - CHANNEL_TIMELINE_MAX_SERIES);
+    var visibleChannels = channelList.slice(0, CHANNEL_TIMELINE_MAX_SERIES);
+
+    var maxCount = 1;
+    for (var vi = 0; vi < visibleChannels.length; vi++) {
+      for (var hi2 = 0; hi2 < hours.length; hi2++) {
+        var c = lookup[hours[hi2] + '|' + visibleChannels[vi]] || 0;
+        if (c > maxCount) maxCount = c;
+      }
+    }
+
     var colors = ['#ef4444','#22c55e','#3b82f6','#f59e0b','#8b5cf6','#ec4899','#14b8a6','#64748b'];
     var w = 600, h = 180, pad = 35;
     var xScale = (w - pad * 2) / Math.max(hours.length - 1, 1);
     var yScale = (h - pad * 2) / maxCount;
     var svg = '<svg viewBox="0 0 ' + w + ' ' + h + '" style="width:100%;max-height:180px" role="img" aria-label="Channel message activity over time"><title>Channel message activity over time</title>';
-    for (var ci = 0; ci < channelList.length; ci++) {
+    for (var ci = 0; ci < visibleChannels.length; ci++) {
       var pts = [];
       for (var hi = 0; hi < hours.length; hi++) {
-        var count = lookup[hours[hi] + '|' + channelList[ci]] || 0;
+        var count = lookup[hours[hi] + '|' + visibleChannels[ci]] || 0;
         var x = pad + hi * xScale;
         var y = h - pad - count * yScale;
         pts.push(x + ',' + y);
@@ -876,8 +907,11 @@
     }
     svg += '</svg>';
     var legendParts = [];
-    for (var lci = 0; lci < channelList.length; lci++) {
-      legendParts.push('<span><span class="legend-dot" style="background:' + colors[lci % colors.length] + '"></span>' + esc(channelList[lci]) + '</span>');
+    for (var lci = 0; lci < visibleChannels.length; lci++) {
+      legendParts.push('<span><span class="legend-dot" style="background:' + colors[lci % colors.length] + '"></span>' + esc(visibleChannels[lci]) + '</span>');
+    }
+    if (hiddenCount > 0) {
+      legendParts.push('<span class="text-muted">+' + hiddenCount + ' more</span>');
     }
     svg += '<div class="timeline-legend">' + legendParts.join('') + '</div>';
     return svg;
@@ -1937,15 +1971,18 @@
       }
 
       // Top hops leaderboard
-      html += `<div class="analytics-section"><h3>🏆 Top 20 Longest Hops</h3><table class="data-table"><thead><tr><th scope="col">#</th><th scope="col">From</th><th scope="col">To</th><th scope="col">Distance (${distUnitLabel})</th><th scope="col">Type</th><th scope="col">SNR</th><th scope="col">Packet</th><th scope="col"></th></tr></thead><tbody>`;
+      html += `<div class="analytics-section"><h3>🏆 Top 20 Longest Hops</h3><table class="data-table"><thead><tr><th scope="col">#</th><th scope="col">From</th><th scope="col">To</th><th scope="col">Distance (${distUnitLabel})</th><th scope="col">Type</th><th scope="col">Obs</th><th scope="col">Best SNR</th><th scope="col">Median SNR</th><th scope="col">Packet</th><th scope="col"></th></tr></thead><tbody>`;
       const top20 = data.topHops.slice(0, 20);
       top20.forEach((h, i) => {
         const fromLink = h.fromPk ? `<a href="#/nodes/${encodeURIComponent(h.fromPk)}" class="analytics-link">${esc(h.fromName)}</a>` : esc(h.fromName || '?');
         const toLink = h.toPk ? `<a href="#/nodes/${encodeURIComponent(h.toPk)}" class="analytics-link">${esc(h.toName)}</a>` : esc(h.toName || '?');
-        const snr = h.snr != null ? h.snr + ' dB' : '<span class="text-muted">—</span>';
+        const bestSnr = h.bestSnr != null ? Number(h.bestSnr).toFixed(1) + ' dB' : '<span class="text-muted">—</span>';
+        const medianSnr = h.medianSnr != null ? Number(h.medianSnr).toFixed(1) + ' dB' : '<span class="text-muted">—</span>';
+        const obs = h.obsCount != null ? h.obsCount : 1;
         const pktLink = h.hash ? `<a href="#/packet/${encodeURIComponent(h.hash)}" class="analytics-link mono" style="font-size:0.85em">${esc(h.hash.slice(0, 12))}…</a>` : '—';
         const mapBtn = h.fromPk && h.toPk ? `<button class="btn-icon dist-map-hop" data-from="${esc(h.fromPk)}" data-to="${esc(h.toPk)}" title="View on map">🗺️</button>` : '';
-        html += `<tr><td>${i+1}</td><td>${fromLink}</td><td>${toLink}</td><td><strong>${formatDistance(h.dist)}</strong></td><td>${esc(h.type)}</td><td>${snr}</td><td>${pktLink}</td><td>${mapBtn}</td></tr>`;
+        const tsTitle = h.timestamp ? `Best observation: ${h.timestamp}` : '';
+        html += `<tr title="${esc(tsTitle)}"><td>${i+1}</td><td>${fromLink}</td><td>${toLink}</td><td><strong>${formatDistance(h.dist)}</strong></td><td>${esc(h.type)}</td><td>${obs}</td><td>${bestSnr}</td><td>${medianSnr}</td><td>${pktLink}</td><td>${mapBtn}</td></tr>`;
       });
       html += `</tbody></table></div>`;
 
@@ -3481,7 +3518,7 @@ function destroy() { _analyticsData = {}; _channelData = null; if (_ngState && _
           return '<tr class="' + rowClass + '" data-pubkey="' + esc(n.pubkey) + '" style="cursor:pointer">' +
             '<td><strong>' + esc(n.nodeName || n.pubkey.slice(0, 12)) + '</strong></td>' +
             '<td style="font-family:var(--mono,monospace)">' + skewText + '</td>' +
-            '<td>' + renderSkewBadge(n.severity, skewVal) + '</td>' +
+            '<td>' + renderSkewBadge(n.severity, skewVal, n) + '</td>' +
             '<td style="font-family:var(--mono,monospace)">' + driftText + '</td>' +
             '<td style="font-size:11px">' + lastAdv + '</td>' +
             '</tr>';

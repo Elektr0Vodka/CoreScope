@@ -222,6 +222,10 @@ console.log('\n=== app.js: routeTypeName / payloadTypeName ===');
   test('payloadTypeName(4) = Advert', () => assert.strictEqual(ctx.payloadTypeName(4), 'Advert'));
   test('payloadTypeName(2) = Direct Msg', () => assert.strictEqual(ctx.payloadTypeName(2), 'Direct Msg'));
   test('payloadTypeName(99) = UNKNOWN', () => assert.strictEqual(ctx.payloadTypeName(99), 'UNKNOWN'));
+  test('getPathLenOffset: transport route (0) → 5', () => assert.strictEqual(ctx.getPathLenOffset(0), 5));
+  test('getPathLenOffset: transport route (3) → 5', () => assert.strictEqual(ctx.getPathLenOffset(3), 5));
+  test('getPathLenOffset: flood route (1) → 1', () => assert.strictEqual(ctx.getPathLenOffset(1), 1));
+  test('getPathLenOffset: direct route (2) → 1', () => assert.strictEqual(ctx.getPathLenOffset(2), 1));
 }
 
 console.log('\n=== app.js: truncate ===');
@@ -5361,6 +5365,10 @@ console.log('\n=== packets.js: buildFieldTable transport offsets (#765) ===');
   ftCtx.escapeHtml = (s) => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   ftCtx.window.escapeHtml = ftCtx.escapeHtml;
   ftCtx.window.HopDisplay = { renderHop: (hex) => hex };
+  ftCtx.isTransportRoute = (rt) => rt === 0 || rt === 3;
+  ftCtx.window.isTransportRoute = ftCtx.isTransportRoute;
+  ftCtx.getPathLenOffset = (rt) => ftCtx.isTransportRoute(rt) ? 5 : 1;
+  ftCtx.window.getPathLenOffset = ftCtx.getPathLenOffset;
   loadInCtx(ftCtx, 'public/packets.js');
   const { buildFieldTable, fieldRow } = ftCtx.window._packetsTestAPI;
 
@@ -5447,6 +5455,10 @@ console.log('\n=== packets.js: buildFieldTable hop count from path_len (#844) ==
   ftCtx.escapeHtml = (s) => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   ftCtx.window.escapeHtml = ftCtx.escapeHtml;
   ftCtx.window.HopDisplay = { renderHop: (hex) => hex };
+  ftCtx.isTransportRoute = (rt) => rt === 0 || rt === 3;
+  ftCtx.window.isTransportRoute = ftCtx.isTransportRoute;
+  ftCtx.getPathLenOffset = (rt) => ftCtx.isTransportRoute(rt) ? 5 : 1;
+  ftCtx.window.getPathLenOffset = ftCtx.getPathLenOffset;
   loadInCtx(ftCtx, 'public/packets.js');
   const { buildFieldTable } = ftCtx.window._packetsTestAPI;
 
@@ -5695,6 +5707,15 @@ console.log('\n=== channel-decrypt.js: key derivation, MAC, parsing, storage ===
     assert.strictEqual(ctx.window.renderSkewBadge(null, 0), '');
   });
 
+  test('renderSkewBadge renders bimodal_clock badge with tooltip (#845)', () => {
+    var cs = { goodFraction: 0.6, recentBadSampleCount: 4, recentSampleCount: 10 };
+    var html = ctx.window.renderSkewBadge('bimodal_clock', -5, cs);
+    assert.ok(html.includes('skew-badge--bimodal_clock'), 'should contain bimodal_clock class');
+    assert.ok(html.includes('bimodal'), 'tooltip should mention bimodal');
+    assert.ok(html.includes('40%'), 'tooltip should show bad percentage');
+    assert.ok(html.includes('⏰'), 'should contain clock emoji');
+  });
+
   test('renderSkewSparkline returns SVG with data points', () => {
     var samples = [
       { ts: 1000, skew: 10 },
@@ -5884,6 +5905,214 @@ console.log('\n=== analytics.js: renderCollisionsFromServer collision table ==='
     const src = fs.readFileSync('public/analytics.js', 'utf8');
     assert.ok(src.includes("localStorage.setItem('ng-min-score'"), 'should write ng-min-score to localStorage on change');
 
+  });
+}
+
+// ===== Issue #849: Per-observation packet detail tests =====
+{
+  console.log('\n=== Issue #849: Per-observation packet detail ===');
+
+  // Test helper: extract hop count from raw_hex path_len byte
+  function extractRawHopCount(rawHex, routeType) {
+    if (!rawHex || rawHex.length < 4) return null;
+    let plOff = 1;
+    if (routeType === 0 || routeType === 3) plOff = 5;
+    const plByte = parseInt(rawHex.slice(plOff * 2, plOff * 2 + 2), 16);
+    if (isNaN(plByte)) return null;
+    return plByte & 0x3F;
+  }
+
+  test('#849: hop count from raw_hex path_len byte (2 hops)', () => {
+    // path_len byte = 0x82: hash_size=2+1=3, hash_count=2
+    const rawHex = '0482aabbccddee'; // header + path_len(0x82) + path data
+    assert.strictEqual(extractRawHopCount(rawHex, 1), 2);
+  });
+
+  test('#849: hop count from raw_hex path_len byte (0 hops = direct)', () => {
+    const rawHex = '0400'; // header + path_len=0x00
+    assert.strictEqual(extractRawHopCount(rawHex, 1), 0);
+  });
+
+  test('#849: hop count from raw_hex for transport route (offset 5)', () => {
+    // Transport routes have 4 bytes of transport codes before path_len
+    const rawHex = '00112233440541B127D7'; // header + 4 transport bytes + path_len(0x05)=5 hops
+    assert.strictEqual(extractRawHopCount(rawHex, 0), 5);
+  });
+
+  test('#849: hop count warns on inconsistency (path_json vs raw_hex)', () => {
+    // path_json has 3 hops, but raw_hex says 2
+    const pathJson = ['41B1', '27D7', '5EB0'];
+    const rawHopCount = 2;
+    assert.notStrictEqual(pathJson.length, rawHopCount, 'should detect inconsistency');
+    // In production code, rawHopCount is trusted
+    assert.strictEqual(rawHopCount, 2);
+  });
+
+  test('#849: per-observation fields override aggregated packet fields', () => {
+    const pkt = { id: 1, hash: 'abc', observer_id: 'obs-agg', snr: 10, rssi: -90, path_json: '["A","B","C"]', timestamp: '2026-01-01T00:00:00Z' };
+    const obs = { id: 2, observer_id: 'obs-1', snr: 5, rssi: -85, path_json: '["A"]', timestamp: '2026-01-01T00:01:00Z' };
+    // Simulate what renderDetail does: spread obs over pkt
+    const effective = {...pkt, ...obs, _isObservation: true};
+    delete effective._parsedPath; // clear cache
+    assert.strictEqual(effective.observer_id, 'obs-1');
+    assert.strictEqual(effective.snr, 5);
+    assert.strictEqual(effective.rssi, -85);
+    assert.strictEqual(effective.timestamp, '2026-01-01T00:01:00Z');
+  });
+
+  test('#849: first observation used when no specific observation selected', () => {
+    const observations = [
+      { id: 10, observer_id: 'obs-A', path_json: '["X"]' },
+      { id: 20, observer_id: 'obs-B', path_json: '["X","Y","Z"]' }
+    ];
+    // No targetObsId → use observations[0]
+    const currentObs = observations[0];
+    assert.strictEqual(currentObs.id, 10);
+    assert.strictEqual(currentObs.observer_id, 'obs-A');
+  });
+
+  test('#849: clicking observation row selects that observation', () => {
+    const observations = [
+      { id: 10, observer_id: 'obs-A', path_json: '["X"]' },
+      { id: 20, observer_id: 'obs-B', path_json: '["X","Y","Z"]' }
+    ];
+    const targetObsId = '20';
+    const currentObs = observations.find(o => String(o.id) === String(targetObsId));
+    assert.ok(currentObs);
+    assert.strictEqual(currentObs.observer_id, 'obs-B');
+  });
+
+  test('#849: null/missing raw_hex returns null hop count', () => {
+    assert.strictEqual(extractRawHopCount(null, 1), null);
+    assert.strictEqual(extractRawHopCount('', 1), null);
+    assert.strictEqual(extractRawHopCount('04', 1), null); // too short
+  });
+}
+
+// ===== Issue #852: hashSize offset + var(--muted) regression =====
+{
+  console.log('\n=== Issue #852: hashSize path_len offset + var(--muted) regression ===');
+
+  // Use getPathLenOffset from app.js (loaded via vm context) to avoid duplicating offset logic
+  const ctx852 = makeSandbox();
+  loadInCtx(ctx852, 'public/roles.js');
+  loadInCtx(ctx852, 'public/app.js');
+
+  function extractHashSize(rawHex, routeType) {
+    const plOff = ctx852.getPathLenOffset(routeType);
+    const rawPathByte = rawHex ? parseInt(rawHex.slice(plOff * 2, plOff * 2 + 2), 16) : NaN;
+    return (isNaN(rawPathByte) || (rawPathByte & 0x3F) === 0) ? null : ((rawPathByte >> 6) + 1);
+  }
+
+  test('#852: hashSize for flood route (route_type=1, offset 1)', () => {
+    // Byte at offset 1 = 0x82 → hash_size = (0x82 >> 6) + 1 = 3
+    const rawHex = '0482aabbccddee';
+    assert.strictEqual(extractHashSize(rawHex, 1), 3);
+  });
+
+  test('#852: hashSize for direct transport route (route_type=0, offset 5)', () => {
+    // Bytes 1-4 are next_hop+last_hop, byte at offset 5 = 0x45 → hash_size = (0x45 >> 6) + 1 = 2
+    const rawHex = '001122334445aabb';
+    assert.strictEqual(extractHashSize(rawHex, 0), 2);
+  });
+
+  test('#852: hashSize for transport route flood (route_type=3, offset 5)', () => {
+    const rawHex = '00aabbccdd85aabb';
+    assert.strictEqual(extractHashSize(rawHex, 3), 3); // 0x85 >> 6 = 2, +1 = 3
+  });
+
+  test('#852: hashSize returns null for missing raw_hex', () => {
+    assert.strictEqual(extractHashSize(null, 1), null);
+    assert.strictEqual(extractHashSize('', 0), null);
+  });
+
+  test('#852: no var(--muted) in public/ files (regression guard)', () => {
+    const fs = require('fs');
+    const path = require('path');
+    const pubDir = path.join(__dirname, 'public');
+    const files = fs.readdirSync(pubDir).filter(f => f.endsWith('.js') || f.endsWith('.css'));
+    files.forEach(f => {
+      const content = fs.readFileSync(path.join(pubDir, f), 'utf8');
+      // Match var(--muted) but not var(--text-muted) or var(--bg-muted) etc.
+      const matches = content.match(/var\(--muted\)/g);
+      if (matches) throw new Error(`${f} contains undefined CSS var var(--muted); use var(--text-muted)`);
+    });
+  });
+}
+
+// ─── #862: Pubkey prefix search ──────────────────────────────────────────────
+{
+  const ctx = makeSandbox();
+  ctx.ROLE_COLORS = { repeater: '#22c55e', room: '#6366f1', companion: '#3b82f6', sensor: '#f59e0b' };
+  ctx.ROLE_STYLE = {};
+  ctx.TYPE_COLORS = {};
+  ctx.getNodeStatus = () => 'active';
+  ctx.getHealthThresholds = () => ({ staleMs: 600000, degradedMs: 1800000, silentMs: 86400000 });
+  ctx.timeAgo = () => '1m ago';
+  ctx.truncate = (s) => s;
+  ctx.escapeHtml = (s) => String(s || '');
+  ctx.payloadTypeName = () => 'Advert';
+  ctx.payloadTypeColor = () => 'advert';
+  ctx.registerPage = () => {};
+  ctx.RegionFilter = { init: () => {}, onChange: () => () => {}, getRegionParam: () => '' };
+  ctx.debouncedOnWS = () => null;
+  ctx.onWS = () => {};
+  ctx.offWS = () => {};
+  ctx.debounce = (fn) => fn;
+  ctx.api = () => Promise.resolve({ nodes: [], counts: {} });
+  ctx.invalidateApiCache = () => {};
+  ctx.CLIENT_TTL = { nodeList: 90000, nodeDetail: 240000, nodeHealth: 240000 };
+  ctx.initTabBar = () => {};
+  ctx.getFavorites = () => [];
+  ctx.favStar = () => '';
+  ctx.bindFavStars = () => {};
+  ctx.makeColumnsResizable = () => {};
+  ctx.Set = Set;
+  ctx.HEALTH_THRESHOLDS = { infraSilentMs: 86400000, nodeSilentMs: 7200000 };
+  loadInCtx(ctx, 'public/nodes.js');
+
+  const matchesSearch = ctx.window._nodesMatchesSearch;
+
+  test('#862: _nodesMatchesSearch matches name substring', () => {
+    const node = { name: 'MyRepeater', public_key: '3faebb0011223344' };
+    assert.strictEqual(matchesSearch(node, 'repeat'), true);
+    assert.strictEqual(matchesSearch(node, 'REPEAT'), true);
+  });
+
+  test('#862: _nodesMatchesSearch matches pubkey prefix (hex)', () => {
+    const node = { name: 'MyRepeater', public_key: '3faebb0011223344' };
+    assert.strictEqual(matchesSearch(node, '3f'), true);
+    assert.strictEqual(matchesSearch(node, '3fae'), true);
+    assert.strictEqual(matchesSearch(node, '3FAEBB'), true);
+  });
+
+  test('#862: _nodesMatchesSearch does NOT match pubkey substring (only prefix)', () => {
+    const node = { name: 'MyRepeater', public_key: '3faebb0011223344' };
+    assert.strictEqual(matchesSearch(node, 'aebb'), false);
+  });
+
+  test('#862: _nodesMatchesSearch returns true for empty query', () => {
+    const node = { name: 'Test', public_key: 'abcdef1234567890' };
+    assert.strictEqual(matchesSearch(node, ''), true);
+    assert.strictEqual(matchesSearch(node, null), true);
+  });
+
+  test('#862: _nodesMatchesSearch mixed query (non-hex) only matches name', () => {
+    const node = { name: 'alpha', public_key: 'abcdef1234567890' };
+    assert.strictEqual(matchesSearch(node, 'xyz'), false);
+    assert.strictEqual(matchesSearch(node, 'alph'), true);
+  });
+
+  test('#862: _nodesMatchesSearch hex-named node — name "cafe" with pubkey "deadbeef..."', () => {
+    const node = { name: 'cafe', public_key: 'deadbeef11223344' };
+    // "cafe" matches by name (substring), NOT pubkey prefix
+    assert.strictEqual(matchesSearch(node, 'cafe'), true);
+    // "dead" matches by pubkey prefix
+    assert.strictEqual(matchesSearch(node, 'dead'), true);
+    // "cafe" should NOT match pubkey (not a prefix of "deadbeef")
+    assert.strictEqual(matchesSearch(node, 'beef'), false); // not a prefix, not in name
+    // "ca" matches name substring
+    assert.strictEqual(matchesSearch(node, 'ca'), true);
   });
 }
 

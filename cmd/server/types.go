@@ -712,7 +712,9 @@ type DistanceHop struct {
 	ToPk      string      `json:"toPk"`
 	Dist      float64     `json:"dist"`
 	Type      string      `json:"type"`
-	SNR       interface{} `json:"snr"`
+	BestSnr   interface{} `json:"bestSnr"`
+	MedianSnr interface{} `json:"medianSnr"`
+	ObsCount  int         `json:"obsCount"`
 	Hash      string      `json:"hash"`
 	Timestamp string      `json:"timestamp"`
 }
