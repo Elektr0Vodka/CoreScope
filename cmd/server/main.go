@@ -1,12 +1,14 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"database/sql"
 	"flag"
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -78,6 +80,27 @@ func (r *statusRecorder) Write(b []byte) (int, error) {
 	n, err := r.ResponseWriter.Write(b)
 	r.bytes += n
 	return n, err
+}
+
+func (r *statusRecorder) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	hj, ok := r.ResponseWriter.(http.Hijacker)
+	if !ok {
+		return nil, nil, fmt.Errorf("underlying ResponseWriter does not implement http.Hijacker")
+	}
+	return hj.Hijack()
+}
+
+func (r *statusRecorder) Flush() {
+	if f, ok := r.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
+func (r *statusRecorder) Push(target string, opts *http.PushOptions) error {
+	if p, ok := r.ResponseWriter.(http.Pusher); ok {
+		return p.Push(target, opts)
+	}
+	return http.ErrNotSupported
 }
 
 func accessLogMiddleware(next http.Handler) http.Handler {
