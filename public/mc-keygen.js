@@ -522,7 +522,7 @@
       <h3>Further reading</h3>
       <ul>
         <li><a href="https://github.com/meshcore-dev/MeshCore/blob/main/docs/faq.md" target="_blank" rel="noopener">MeshCore protocol FAQ</a></li>
-        <li><a href="https://discord.gg/bSuST8xvet" target="_blank" rel="noopener">MeshCore Discord community</a></li>
+        <li><a href="https://meshcore.gg/" target="_blank" rel="noopener">MeshCore Discord community</a></li>
         <li><a href="https://github.com/agessaman/meshcore-keygen" target="_blank" rel="noopener">Python version (multi-threaded, batch processing)</a></li>
       </ul>
     </div>
