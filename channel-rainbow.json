@@ -1,4 +1,5 @@
-"#024-bot": "f5920e8b7ba3573602eac69d4daa13bf",
+{
+  "#024-bot": "f5920e8b7ba3573602eac69d4daa13bf",
   "#1191": "389bc1fa20e9516fb0e0a26daf8417f0",
   "#27mc": "519cb5036755a21aaa4d9d668da58d96",
   "#3625": "50d9dac9ce971a61ef5fff51a25e2368",
@@ -290,3 +291,4 @@
   "#zwickau": "d1673f085013909393b504ae0fff90c3",
   "#zwolle": "d65fabeef323a4b9ec18fa5b761ceba4",
   "public": "8b3387e9c5cdea6ac9e5edbaa115cd72"
+}
