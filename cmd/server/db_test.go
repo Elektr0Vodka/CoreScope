@@ -100,7 +100,7 @@ func setupTestDB(t *testing.T) *DB {
 		t.Fatal(err)
 	}
 
-	return &DB{conn: conn, isV3: true, hasResolvedPath: true}
+	return &DB{conn: conn, isV3: true, hasResolvedPath: true, hasObserverLastPacket: true}
 }
 
 func seedTestData(t *testing.T, db *DB) {
@@ -1217,7 +1217,7 @@ func setupTestDBV2(t *testing.T) *DB {
 		t.Fatal(err)
 	}
 
-	return &DB{conn: conn, isV3: false}
+	return &DB{conn: conn, isV3: false, hasObserverLastPacket: true}
 }
 
 func TestGetNodesRegionFilterV2(t *testing.T) {
