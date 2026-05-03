@@ -18,9 +18,10 @@ import (
 type DB struct {
 	conn             *sql.DB
 	path             string // filesystem path to the database file
-	isV3             bool   // v3 schema: observer_idx in observations (vs observer_id in v2)
-	hasResolvedPath  bool   // observations table has resolved_path column
-	hasObsRawHex     bool   // observations table has raw_hex column (#881)
+	isV3                  bool   // v3 schema: observer_idx in observations (vs observer_id in v2)
+	hasResolvedPath       bool   // observations table has resolved_path column
+	hasObsRawHex          bool   // observations table has raw_hex column (#881)
+	hasObserverLastPacket bool   // observers table has last_packet_at column (#969)
 
 	// Channel list cache (60s TTL) — avoids repeated GROUP BY scans (#762)
 	channelsCacheMu  sync.Mutex
@@ -79,6 +80,24 @@ func (db *DB) detectSchema() {
 			}
 			if colName == "raw_hex" {
 				db.hasObsRawHex = true
+			}
+		}
+	}
+
+	obsRows, err := db.conn.Query("PRAGMA table_info(observers)")
+	if err != nil {
+		return
+	}
+	defer obsRows.Close()
+	for obsRows.Next() {
+		var cid int
+		var colName string
+		var colType sql.NullString
+		var notNull, pk int
+		var dflt sql.NullString
+		if obsRows.Scan(&cid, &colName, &colType, &notNull, &dflt, &pk) == nil {
+			if colName == "last_packet_at" {
+				db.hasObserverLastPacket = true
 			}
 		}
 	}
@@ -973,7 +992,17 @@ func (db *DB) getObservationsForTransmissions(txIDs []int) map[int][]map[string]
 
 // GetObservers returns active observers (not soft-deleted) sorted by last_seen DESC.
 func (db *DB) GetObservers() ([]Observer, error) {
-	rows, err := db.conn.Query("SELECT id, name, iata, last_seen, first_seen, packet_count, model, firmware, client_version, radio, battery_mv, uptime_secs, noise_floor, last_packet_at FROM observers WHERE inactive IS NULL OR inactive = 0 ORDER BY last_seen DESC")
+	var (
+		query string
+		rows  *sql.Rows
+		err   error
+	)
+	if db.hasObserverLastPacket {
+		query = "SELECT id, name, iata, last_seen, first_seen, packet_count, model, firmware, client_version, radio, battery_mv, uptime_secs, noise_floor, last_packet_at FROM observers WHERE inactive IS NULL OR inactive = 0 ORDER BY last_seen DESC"
+	} else {
+		query = "SELECT id, name, iata, last_seen, first_seen, packet_count, model, firmware, client_version, radio, battery_mv, uptime_secs, noise_floor FROM observers WHERE inactive IS NULL OR inactive = 0 ORDER BY last_seen DESC"
+	}
+	rows, err = db.conn.Query(query)
 	if err != nil {
 		return nil, err
 	}
@@ -984,7 +1013,13 @@ func (db *DB) GetObservers() ([]Observer, error) {
 		var o Observer
 		var batteryMv, uptimeSecs sql.NullInt64
 		var noiseFloor sql.NullFloat64
-		if err := rows.Scan(&o.ID, &o.Name, &o.IATA, &o.LastSeen, &o.FirstSeen, &o.PacketCount, &o.Model, &o.Firmware, &o.ClientVersion, &o.Radio, &batteryMv, &uptimeSecs, &noiseFloor, &o.LastPacketAt); err != nil {
+		var scanErr error
+		if db.hasObserverLastPacket {
+			scanErr = rows.Scan(&o.ID, &o.Name, &o.IATA, &o.LastSeen, &o.FirstSeen, &o.PacketCount, &o.Model, &o.Firmware, &o.ClientVersion, &o.Radio, &batteryMv, &uptimeSecs, &noiseFloor, &o.LastPacketAt)
+		} else {
+			scanErr = rows.Scan(&o.ID, &o.Name, &o.IATA, &o.LastSeen, &o.FirstSeen, &o.PacketCount, &o.Model, &o.Firmware, &o.ClientVersion, &o.Radio, &batteryMv, &uptimeSecs, &noiseFloor)
+		}
+		if scanErr != nil {
 			continue
 		}
 		if batteryMv.Valid {
@@ -1026,8 +1061,14 @@ func (db *DB) GetObserverByID(id string) (*Observer, error) {
 	var o Observer
 	var batteryMv, uptimeSecs sql.NullInt64
 	var noiseFloor sql.NullFloat64
-	err := db.conn.QueryRow("SELECT id, name, iata, last_seen, first_seen, packet_count, model, firmware, client_version, radio, battery_mv, uptime_secs, noise_floor, last_packet_at FROM observers WHERE id = ?", id).
-		Scan(&o.ID, &o.Name, &o.IATA, &o.LastSeen, &o.FirstSeen, &o.PacketCount, &o.Model, &o.Firmware, &o.ClientVersion, &o.Radio, &batteryMv, &uptimeSecs, &noiseFloor, &o.LastPacketAt)
+	var err error
+	if db.hasObserverLastPacket {
+		err = db.conn.QueryRow("SELECT id, name, iata, last_seen, first_seen, packet_count, model, firmware, client_version, radio, battery_mv, uptime_secs, noise_floor, last_packet_at FROM observers WHERE id = ?", id).
+			Scan(&o.ID, &o.Name, &o.IATA, &o.LastSeen, &o.FirstSeen, &o.PacketCount, &o.Model, &o.Firmware, &o.ClientVersion, &o.Radio, &batteryMv, &uptimeSecs, &noiseFloor, &o.LastPacketAt)
+	} else {
+		err = db.conn.QueryRow("SELECT id, name, iata, last_seen, first_seen, packet_count, model, firmware, client_version, radio, battery_mv, uptime_secs, noise_floor FROM observers WHERE id = ?", id).
+			Scan(&o.ID, &o.Name, &o.IATA, &o.LastSeen, &o.FirstSeen, &o.PacketCount, &o.Model, &o.Firmware, &o.ClientVersion, &o.Radio, &batteryMv, &uptimeSecs, &noiseFloor)
+	}
 	if err != nil {
 		return nil, err
 	}
