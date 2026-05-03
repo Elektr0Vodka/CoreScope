@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/sha256"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -2271,6 +2272,10 @@ func (s *PacketStore) filterPackets(q PacketQuery) []*StoreTx {
 	}
 	// Single-pass filter: apply all predicates in one scan.
 	results := filterTxSlice(source, func(tx *StoreTx) bool {
+		// Data integrity: exclude legacy rows missing hash or timestamp (#871)
+		if tx.Hash == "" || tx.FirstSeen == "" {
+			return false
+		}
 		if hasType && (tx.PayloadType == nil || *tx.PayloadType != filterType) {
 			return false
 		}
@@ -3800,6 +3805,33 @@ func (s *PacketStore) GetAnalyticsChannels(region string) map[string]interface{}
 	return result
 }
 
+// channelNameMatchesHash validates that a decrypted channel name hashes to the
+// observed single-byte channel hash. This rejects rainbow-table mismatches where
+// an observer's lookup table incorrectly maps a hash byte to the wrong name.
+// Firmware invariant: channelHash = SHA256(SHA256("#name")[:16])[0]
+func channelNameMatchesHash(name string, hashStr string) bool {
+	expected, err := strconv.Atoi(hashStr)
+	if err != nil {
+		return false
+	}
+	chanName := name
+	if !strings.HasPrefix(chanName, "#") {
+		chanName = "#" + chanName
+	}
+	h1 := sha256.Sum256([]byte(chanName))
+	h2 := sha256.Sum256(h1[:16])
+	return int(h2[0]) == expected
+}
+
+// isPlaceholderName returns true if the name is a "chN" placeholder (not a real decrypted name).
+func isPlaceholderName(name string) bool {
+	if !strings.HasPrefix(name, "ch") {
+		return false
+	}
+	_, err := strconv.Atoi(name[2:])
+	return err == nil
+}
+
 func (s *PacketStore) computeAnalyticsChannels(region string) map[string]interface{} {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -3879,16 +3911,27 @@ func (s *PacketStore) computeAnalyticsChannels(region string) map[string]interfa
 			name = "ch" + hash
 		}
 		encrypted := decoded.Text == "" && decoded.Sender == ""
-		// Use hash as key for grouping (matches Node.js String(hash))
-		chKey := hash
-		if decoded.Type == "CHAN" && decoded.Channel != "" {
-			chKey = hash + "_" + decoded.Channel
+
+		// Bug #978 fix: validate channel name against hash to reject rainbow-table mismatches.
+		// If the claimed channel name doesn't hash to the observed channelHash byte, discard it.
+		if name != "" && name != "ch"+hash && !channelNameMatchesHash(name, hash) {
+			name = "ch" + hash
+			encrypted = true
 		}
+
+		// Bug #978 fix: always group by hash byte alone — same physical channel,
+		// regardless of which observer decrypted it.
+		chKey := hash
 
 		ch := channelMap[chKey]
 		if ch == nil {
 			ch = &chanInfo{Hash: hash, Name: name, Senders: map[string]bool{}, LastActivity: tx.FirstSeen, Encrypted: encrypted}
 			channelMap[chKey] = ch
+		} else {
+			// Upgrade bucket name: if current is placeholder and we have a validated decrypted name
+			if isPlaceholderName(ch.Name) && !isPlaceholderName(name) {
+				ch.Name = name
+			}
 		}
 		ch.Messages++
 		ch.LastActivity = tx.FirstSeen
@@ -4951,6 +4994,103 @@ func (s *PacketStore) computeAnalyticsTopology(region string) map[string]interfa
 	for _, v := range allHopsList {
 		if v > maxHops {
 			maxHops = v
+		}
+	}
+
+	// pmLookup resolves a hop hex string to its prefix-map candidates,
+	// applying the same truncation used during map construction.
+	pmLookup := func(hop string) []nodeInfo {
+		key := strings.ToLower(hop)
+		if len(key) > maxPrefixLen {
+			key = key[:maxPrefixLen]
+		}
+		return pm.m[key]
+	}
+
+	// --- Dedup pass: merge hop prefixes that resolve unambiguously to the same node ---
+	// Only merge when pm.m[hop] has exactly 1 candidate (unique_prefix).
+	// Ambiguous short prefixes (efiten's concern: 1-byte collisions) stay separate.
+	{
+		type dedupInfo struct {
+			totalCount int
+			longestHop string
+		}
+		byPubkey := map[string]*dedupInfo{} // pubkey → merged info
+		ambiguous := map[string]int{}       // hop → count (kept as-is)
+		for h, c := range hopFreq {
+			candidates := pmLookup(h)
+			if len(candidates) == 1 {
+				pk := strings.ToLower(candidates[0].PublicKey)
+				if info, ok := byPubkey[pk]; ok {
+					info.totalCount += c
+					if len(h) > len(info.longestHop) {
+						info.longestHop = h
+					}
+				} else {
+					byPubkey[pk] = &dedupInfo{totalCount: c, longestHop: h}
+				}
+			} else {
+				ambiguous[h] = c
+			}
+		}
+		// Rebuild hopFreq
+		hopFreq = make(map[string]int, len(byPubkey)+len(ambiguous))
+		for _, info := range byPubkey {
+			hopFreq[info.longestHop] = info.totalCount
+		}
+		for h, c := range ambiguous {
+			hopFreq[h] = c
+		}
+	}
+
+	// --- Dedup pass for pairs: merge by resolved pubkey pair ---
+	{
+		type pairDedupInfo struct {
+			totalCount int
+			longestA   string
+			longestB   string
+		}
+		byPubkeyPair := map[string]*pairDedupInfo{} // "pkA|pkB" (sorted) → merged info
+		ambiguousPairs := map[string]int{}
+		for p, c := range pairFreq {
+			parts := strings.SplitN(p, "|", 2)
+			candA := pmLookup(parts[0])
+			candB := pmLookup(parts[1])
+			if len(candA) == 1 && len(candB) == 1 {
+				pkA := strings.ToLower(candA[0].PublicKey)
+				pkB := strings.ToLower(candB[0].PublicKey)
+				// Canonicalize by sorted pubkey
+				if pkA > pkB {
+					pkA, pkB = pkB, pkA
+					parts[0], parts[1] = parts[1], parts[0]
+				}
+				key := pkA + "|" + pkB
+				if info, ok := byPubkeyPair[key]; ok {
+					info.totalCount += c
+					if len(parts[0]) > len(info.longestA) {
+						info.longestA = parts[0]
+					}
+					if len(parts[1]) > len(info.longestB) {
+						info.longestB = parts[1]
+					}
+				} else {
+					byPubkeyPair[key] = &pairDedupInfo{totalCount: c, longestA: parts[0], longestB: parts[1]}
+				}
+			} else {
+				ambiguousPairs[p] = c
+			}
+		}
+		// Rebuild pairFreq
+		pairFreq = make(map[string]int, len(byPubkeyPair)+len(ambiguousPairs))
+		for _, info := range byPubkeyPair {
+			a, b := info.longestA, info.longestB
+			if a > b {
+				a, b = b, a
+			}
+			pairFreq[a+"|"+b] = info.totalCount
+		}
+		for p, c := range ambiguousPairs {
+			pairFreq[p] = c
 		}
 	}
 
