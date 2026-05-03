@@ -2425,6 +2425,13 @@ func writeJSON(w http.ResponseWriter, v interface{}) {
 	}
 }
 
+func writeJSONWithReq(w http.ResponseWriter, r *http.Request, v interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(v); err != nil {
+		log.Printf("[routes] JSON encode error on %s %s: %v", r.Method, r.URL.Path, err)
+	}
+}
+
 func writeError(w http.ResponseWriter, code int, msg string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)

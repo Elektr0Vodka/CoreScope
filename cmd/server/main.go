@@ -568,7 +568,7 @@ Frontend not found. API available at /api/
 		Addr:         fmt.Sprintf(":%d", cfg.Port),
 		Handler:      loggedRouter,
 		ReadTimeout:  30 * time.Second,
-		WriteTimeout: 60 * time.Second,
+		WriteTimeout: 120 * time.Second,
 		IdleTimeout:  120 * time.Second,
 	}
 
