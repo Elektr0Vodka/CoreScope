@@ -906,18 +906,32 @@
     // Store marker data for zoom/resize repositioning (avoids full rebuild)
     _currentMarkerData = allMarkers;
 
+    // Decide which layer receives markers: cluster group or plain layer
+    if (filters.clusters && L.markerClusterGroup) {
+      if (clusterGroup) map.removeLayer(clusterGroup);
+      clusterGroup = L.markerClusterGroup({ chunkedLoading: true });
+      map.removeLayer(markerLayer);
+    } else {
+      if (clusterGroup) { map.removeLayer(clusterGroup); clusterGroup = null; }
+      if (!map.hasLayer(markerLayer)) map.addLayer(markerLayer);
+    }
+
+    const targetLayer = (filters.clusters && clusterGroup) ? clusterGroup : markerLayer;
+
     for (const m of allMarkers) {
       const pos = m.adjustedLatLng || m.latLng;
       const marker = L.marker(pos, { icon: m.icon, alt: m.alt });
       marker._nodeKey = m.node.public_key || m.node.id || null;
       marker.bindPopup(m.popupFn(), { maxWidth: 280 });
-      markerLayer.addLayer(marker);
+      targetLayer.addLayer(marker);
       m._leafletMarker = marker;
       m._leafletLine = null;
       m._leafletDot = null;
 
-      _updateOffsetIndicator(m, markerLayer);
+      if (!filters.clusters) _updateOffsetIndicator(m, markerLayer);
     }
+
+    if (filters.clusters && clusterGroup) map.addLayer(clusterGroup);
 
     // Restore popup that was open before the re-render
     if (_openPopupKey) {
