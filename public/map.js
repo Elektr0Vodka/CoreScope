@@ -824,6 +824,12 @@
   }
 
   function _renderMarkersInner() {
+    // Remember any open popup so we can restore it after the layer rebuild
+    var _openPopupKey = null;
+    markerLayer.eachLayer(function(m) {
+      if (m.isPopupOpen && m.isPopupOpen() && m._nodeKey) _openPopupKey = m._nodeKey;
+    });
+
     markerLayer.clearLayers();
     _currentMarkerData = [];
 
@@ -911,6 +917,13 @@
       m._leafletDot = null;
 
       _updateOffsetIndicator(m, markerLayer);
+    }
+
+    // Restore popup that was open before the re-render
+    if (_openPopupKey) {
+      markerLayer.eachLayer(function(m) {
+        if (m._nodeKey === _openPopupKey && m.openPopup) m.openPopup();
+      });
     }
   }
 

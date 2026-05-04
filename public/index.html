@@ -49,8 +49,13 @@
         <a href="#/map" class="nav-link" data-route="map" data-priority="high">Map</a>
         <a href="#/live" class="nav-link" data-route="live" data-priority="high">Live</a>
         <a href="#/channels" class="nav-link" data-route="channels">Channels</a>
-        <a href="#/nodes" class="nav-link" data-route="nodes" data-priority="high">Nodes</a>
-        <a href="#/roles" class="nav-link" data-route="roles">Roles</a>
+        <div class="nav-dropdown">
+          <span class="nav-link nav-nodes-btn" data-route="nodes">Nodes ▾</span>
+          <div class="dropdown-menu">
+            <a href="#/nodes" class="dropdown-item nav-link" data-route="nodes">📋 Nodes</a>
+            <a href="#/roles" class="dropdown-item nav-link" data-route="roles">🎭 Roles</a>
+          </div>
+        </div>
         <a href="#/observers" class="nav-link" data-route="observers">Observers</a>
         <a href="#/analytics" class="nav-link" data-route="analytics">Analytics</a>
         <a href="#/perf" class="nav-link" data-route="perf">⚡ Perf</a>

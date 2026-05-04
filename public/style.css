@@ -998,9 +998,10 @@ button.ch-item:hover .ch-remove-btn { opacity: 0.6; }
   .nav-left { gap: 12px; }
   body.nav-open { overflow: hidden; }
 
-  /* Flatten the Tools nested dropdown — inline items instead of hover sub-menu */
+  /* Flatten the Tools/Nodes nested dropdown — inline items instead of hover sub-menu */
   .nav-dropdown { width: 100%; }
-  .nav-dropdown .nav-tools-btn { display: none; }
+  .nav-dropdown .nav-tools-btn,
+  .nav-dropdown .nav-nodes-btn { display: none; }
   .nav-dropdown .dropdown-menu {
     display: block; position: static; box-shadow: none;
     background: none; border: none; border-radius: 0; padding: 0; min-width: 0;
@@ -2515,9 +2516,9 @@ th.sort-active { color: var(--accent, #60a5fa); }
 .keygen-perf-table th, .keygen-perf-table td { padding: 5px 12px; border: 1px solid var(--border); text-align: left; }
 .keygen-perf-table th { background: var(--bg); font-weight: 600; font-size: 12px; }
 
-/* --- Tools nav dropdown --- */
-.nav-tools-btn { cursor: default; }
-.nav-tools-btn.active { background: var(--nav-active-bg); border-radius: 6px; }
+/* --- Tools / Nodes nav dropdowns --- */
+.nav-tools-btn, .nav-nodes-btn { cursor: default; }
+.nav-tools-btn.active, .nav-nodes-btn.active { background: var(--nav-active-bg); border-radius: 6px; }
 
 @media (max-width: 640px) {
   .keygen-page { padding: 16px 12px 40px; }
