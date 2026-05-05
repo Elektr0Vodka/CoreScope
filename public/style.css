@@ -1335,13 +1335,7 @@ button.ch-item:hover .ch-icon-btn { opacity: 1; }
   white-space: nowrap;
 }
 .nav-more-menu .nav-link:hover { background: var(--nav-bg2); color: var(--nav-text); }
-.nav-more-menu .nav-link.active { background: var(--nav-active-bg); }
-.nav-more-group-label {
-  display: block; padding: 6px 16px 2px; font-size: 11px; font-weight: 600;
-  color: var(--text-muted); text-transform: uppercase; letter-spacing: .05em;
-  pointer-events: none;
-}
-/* Ensure nav stays above Leaflet map */
+.nav-more-menu .nav-link.active { background: var(--nav-active-bg); }/* Ensure nav stays above Leaflet map */
 .nav-links.open { z-index: 1100; }
 #map-wrap .leaflet-container { z-index: 1; }
 
