@@ -8,6 +8,10 @@
 
   const PREF_KEY = 'meshcore-user-level';
   const MY_NODES_KEY = 'meshcore-my-nodes'; // [{pubkey, name, addedAt}]
+  const ANNOUNCEMENT_LANG_KEY = 'home-announcement-lang';
+  const ANNOUNCEMENT_COLLAPSED_KEY = 'home-announcement-collapsed';
+  const TOOLBOX_URL = 'https://dutch-meshcore.github.io/Dutch-Meshcore-Toolbox/#/';
+  const DISCORD_URL = 'https://discord.gg/HfJVk9J29K';
 
   function getMyNodes() {
     try { return JSON.parse(localStorage.getItem(MY_NODES_KEY)) || []; } catch { return []; }
@@ -53,9 +57,11 @@
             <span>Just the analyzer, skip the guides</span>
           </button>
         </div>
-      </section>`;
+      </section>
+      ${announcementModal()}`;
     document.getElementById('chooseNew').addEventListener('click', () => { setLevel('new'); renderHome(container); });
     document.getElementById('chooseExp').addEventListener('click', () => { setLevel('experienced'); renderHome(container); });
+    setupAnnouncement(container);
   }
 
   function renderHome(container) {
@@ -74,6 +80,8 @@
           <div class="home-suggest" id="homeSuggest" role="listbox"></div>
         </div>
       </section>
+
+      ${announcementModal()}
 
       ${hasNodes ? '<div class="my-nodes-grid" id="myNodesGrid"><div class="my-nodes-loading">Loading your nodes…</div></div>' : '<div class="my-nodes-grid" id="myNodesGrid"></div>'}
 
@@ -129,6 +137,7 @@
     });
 
     setupSearch(container);
+    setupAnnouncement(container);
     loadStats();
     if (hasNodes) loadMyNodes();
 
@@ -143,6 +152,83 @@
       q.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
       });
+    });
+  }
+
+  function getAnnouncementLang() {
+    return localStorage.getItem(ANNOUNCEMENT_LANG_KEY) === 'en' ? 'en' : 'nl';
+  }
+
+  function isAnnouncementCollapsed() {
+    return localStorage.getItem(ANNOUNCEMENT_COLLAPSED_KEY) === 'true';
+  }
+
+  function announcementModal() {
+    const lang = getAnnouncementLang();
+    const collapsed = isAnnouncementCollapsed();
+    return `
+      <section class="home-announcement-modal" id="homeAnnouncement" role="dialog" aria-labelledby="homeAnnouncementTitle" aria-describedby="homeAnnouncementBody" data-lang="${lang}" data-collapsed="${collapsed ? 'true' : 'false'}">
+        <div class="home-announcement-head">
+          <div>
+            <p class="home-announcement-kicker">MQTT</p>
+            <h2 id="homeAnnouncementTitle">
+              <span data-announcement-title="nl">Belangrijke migratie</span>
+              <span data-announcement-title="en">Important migration</span>
+            </h2>
+          </div>
+          <div class="home-announcement-controls">
+            <div class="home-announcement-lang" role="group" aria-label="Announcement language">
+              <button type="button" data-announcement-lang="nl" aria-pressed="${lang === 'nl' ? 'true' : 'false'}">NL</button>
+              <button type="button" data-announcement-lang="en" aria-pressed="${lang === 'en' ? 'true' : 'false'}">EN</button>
+            </div>
+            <button type="button" class="home-announcement-toggle" id="homeAnnouncementToggle" aria-expanded="${collapsed ? 'false' : 'true'}" aria-controls="homeAnnouncementBody">
+              <span data-announcement-collapse="hide-nl">Verberg</span>
+              <span data-announcement-collapse="hide-en">Hide</span>
+              <span data-announcement-collapse="show-nl">Toon</span>
+              <span data-announcement-collapse="show-en">Show</span>
+            </button>
+          </div>
+        </div>
+        <div class="home-announcement-body" id="homeAnnouncementBody"${collapsed ? ' hidden' : ''}>
+          <p data-announcement-copy="nl">Heb jij jouw observers al omgezet naar de dutchmeshcore.nl servers? De Cornmeister MQTT komt binnenkort te vervallen.</p>
+          <p data-announcement-copy="en">Have you already moved your observers to the dutchmeshcore.nl servers? The Cornmeister MQTT server will be retired soon.</p>
+          <div class="home-announcement-actions">
+            <a href="${TOOLBOX_URL}" target="_blank" rel="noopener" class="home-announcement-primary">
+              <span data-announcement-action="nl">Klik hier voor meer info</span>
+              <span data-announcement-action="en">Click here for more info</span>
+            </a>
+            <a href="${DISCORD_URL}" target="_blank" rel="noopener" class="home-announcement-secondary">
+              <span data-announcement-discord="nl">Vragen? Bezoek onze Discord server</span>
+              <span data-announcement-discord="en">Questions? Visit our Discord server</span>
+            </a>
+          </div>
+        </div>
+      </section>`;
+  }
+
+  function setupAnnouncement(container) {
+    const modal = container.querySelector('#homeAnnouncement');
+    if (!modal) return;
+    const body = modal.querySelector('#homeAnnouncementBody');
+    const toggle = modal.querySelector('#homeAnnouncementToggle');
+
+    modal.querySelectorAll('[data-announcement-lang]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const lang = btn.dataset.announcementLang === 'en' ? 'en' : 'nl';
+        localStorage.setItem(ANNOUNCEMENT_LANG_KEY, lang);
+        modal.dataset.lang = lang;
+        modal.querySelectorAll('[data-announcement-lang]').forEach(b => {
+          b.setAttribute('aria-pressed', b.dataset.announcementLang === lang ? 'true' : 'false');
+        });
+      });
+    });
+
+    toggle?.addEventListener('click', () => {
+      const collapsed = modal.dataset.collapsed !== 'true';
+      modal.dataset.collapsed = collapsed ? 'true' : 'false';
+      localStorage.setItem(ANNOUNCEMENT_COLLAPSED_KEY, collapsed ? 'true' : 'false');
+      toggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+      if (body) body.hidden = collapsed;
     });
   }
 
