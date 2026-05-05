@@ -45,12 +45,12 @@
       ANON_REQ: '#f43f5e'
     },
     home: {
-      heroTitle: 'CoreScope',
-      heroSubtitle: 'Find your nodes to start monitoring them.',
+      heroTitle: 'Cornmeister.nl',
+      heroSubtitle: 'Real-time MeshCore Netherlands mesh network analyzer',
       steps: [
-        { emoji: '💬', title: 'Join the Bay Area MeshCore Discord', description: 'The community Discord is the best place to get help and find local mesh enthusiasts.' },
+        { emoji: '💬', title: 'Join the Cornmeister Discord', description: 'The community Discord is the best place to get help and find local mesh enthusiasts.' },
         { emoji: '🔵', title: 'Connect via Bluetooth', description: 'Flash BLE companion firmware and pair with your device.' },
-        { emoji: '📻', title: 'Set the right frequency preset', description: 'Match the frequency preset used by your local mesh community.' },
+        { emoji: '📻', title: 'Set the frequency for Nederland (EU/UK Narrow)', description: 'Use the Netherlands recommended settings: 869.618 MHz, BW 62.5 kHz, SF 8, CR 8, 22 dBm. Example frequency: 869.618 MHz.' },
         { emoji: '📡', title: 'Advertise yourself', description: 'Send an ADVERT so repeaters and observers can see you.' },
         { emoji: '🔁', title: 'Check "Heard N repeats"', description: 'Verify your node is being relayed through the mesh.' },
         { emoji: '📍', title: 'Repeaters near you?', description: 'Check the map for nearby repeaters and coverage.' }
@@ -59,7 +59,7 @@
       footerLinks: [
         { label: '📦 Packets', url: '#/packets' },
         { label: '🗺️ Network Map', url: '#/map' },
-        { label: '🔴 Live', url: '#/live' },
+        { label: 'Live', url: '#/live' },
         { label: '📡 All Nodes', url: '#/nodes' },
         { label: '💬 Channels', url: '#/channels' }
       ]

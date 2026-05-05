@@ -1318,9 +1318,14 @@ window.addEventListener('DOMContentLoaded', () => {
       // Fallback if customize-v2.js didn't load
       window.SITE_CONFIG = cfg;
     }
+    // Home reads SITE_CONFIG synchronously during init. On a hard refresh of
+    // #/home, the first render can beat this async config fetch; redraw once
+    // after config lands so refresh and SPA navigation use the same copy.
+    if (currentPage === 'home') navigate();
   }).catch(() => {
     window.SITE_CONFIG = { timestamps: { defaultMode: 'ago', timezone: 'local', formatPreset: 'iso', customFormat: '', allowCustomFormat: false } };
     if (window._customizerV2) window._customizerV2.init(window.SITE_CONFIG);
+    if (currentPage === 'home') navigate();
   });
 
   // Navigate immediately — don't gate data-fetching pages on cosmetic theme fetch

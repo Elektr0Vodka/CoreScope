@@ -7,11 +7,11 @@
   // ── Constants ──
 
   var DEFAULT_HOME = {
-    heroTitle: 'CoreScope',
-    heroSubtitle: 'Real-time MeshCore LoRa mesh network analyzer',
+    heroTitle: 'Cornmeister.nl',
+    heroSubtitle: 'Real-time MeshCore Netherlands mesh network analyzer',
     steps: [
       { emoji: '🔵', title: 'Connect via Bluetooth', description: 'Flash **BLE companion** firmware from [MeshCore Flasher](https://flasher.meshcore.co.uk/).\n- Screenless devices: default PIN `123456`\n- Screen devices: random PIN shown on display\n- If pairing fails: forget device, reboot, re-pair' },
-      { emoji: '📻', title: 'Set the right frequency preset', description: '**US Recommended:**\n`910.525 MHz · BW 62.5 kHz · SF 7 · CR 5`\nSelect **"US Recommended"** in the app or flasher.' },
+      { emoji: '📻', title: 'Set the frequency for Nederland (EU/UK Narrow)', description: '**Netherlands Recommended:**\n`869.618 MHz · BW 62.5 kHz · SF 8 · CR 8 · 22 dBm`\nExample frequency: `869.618 MHz`.' },
       { emoji: '📡', title: 'Advertise yourself', description: 'Tap the signal icon → **Flood** to broadcast your node to the mesh. Companions only advert when you trigger it manually.' },
       { emoji: '🔁', title: 'Check "Heard N repeats"', description: '- **"Sent"** = transmitted, no confirmation\n- **"Heard 0 repeats"** = no repeater picked it up\n- **"Heard 1+ repeats"** = you\'re on the mesh!' }
     ],
