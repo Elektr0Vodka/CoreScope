@@ -1675,6 +1675,10 @@ func TestHandlePerfHistoryEmpty(t *testing.T) {
 
 func TestHandlePerfHistoryAfterSample(t *testing.T) {
 	srv, router := setupNoStoreServer(t)
+	client := &Client{send: make(chan []byte, 1)}
+	srv.hub.mu.Lock()
+	srv.hub.clients[client] = true
+	srv.hub.mu.Unlock()
 	srv.storePerfSample(srv.collectPerfSample())
 	req := httptest.NewRequest("GET", "/api/perf/history", nil)
 	w := httptest.NewRecorder()
@@ -1697,10 +1701,17 @@ func TestHandlePerfHistoryAfterSample(t *testing.T) {
 	if resp.Samples[0].Ts <= 0 {
 		t.Errorf("expected ts > 0, got %d", resp.Samples[0].Ts)
 	}
+	if resp.Samples[0].WSClients != 1 {
+		t.Errorf("expected wsClients = 1, got %d", resp.Samples[0].WSClients)
+	}
 }
 
 func TestHandlePerfCPUFields(t *testing.T) {
-	_, router := setupNoStoreServer(t)
+	srv, router := setupNoStoreServer(t)
+	client := &Client{send: make(chan []byte, 1)}
+	srv.hub.mu.Lock()
+	srv.hub.clients[client] = true
+	srv.hub.mu.Unlock()
 	req := httptest.NewRequest("GET", "/api/perf", nil)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
@@ -1719,6 +1730,9 @@ func TestHandlePerfCPUFields(t *testing.T) {
 	}
 	if resp.GoRuntime.TotalSysMB <= 0 {
 		t.Errorf("totalSysMB should be > 0, got %f", resp.GoRuntime.TotalSysMB)
+	}
+	if resp.WebSocketClients != 1 {
+		t.Errorf("webSocketClients should be 1, got %d", resp.WebSocketClients)
 	}
 }
 

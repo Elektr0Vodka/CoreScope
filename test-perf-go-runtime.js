@@ -82,6 +82,13 @@ const goHealth = {
 
 console.log('\n🧪 perf.js — Go Runtime vs Node Event Loop\n');
 
+test('Graphs include WS Clients from perf samples', () => {
+  const code = fs.readFileSync('public/perf.js', 'utf8');
+  assert.ok(code.includes("id: 'wsclients'"), 'should define a WS Clients chart');
+  assert.ok(code.includes("key: 'wsClients'"), 'chart should read wsClients samples');
+  assert.ok(code.includes('server.webSocketClients'), 'samples should use /api/perf webSocketClients');
+});
+
 // --- Node engine tests ---
 
 test('Node engine shows Event Loop labels', async () => {

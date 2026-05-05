@@ -92,7 +92,7 @@
       ]
     },
     {
-      category: 'MQTT Observers',
+      category: 'Connections',
       charts: [
         {
           id: 'observers', label: 'Observers',
@@ -103,6 +103,7 @@
             { key: 'offlineObservers', label: 'Offline', color: '#ef4444' },
           ]
         },
+        { id: 'wsclients', label: 'WS Clients', datasets: [{ key: 'wsClients', label: 'Clients', color: '#06b6d4' }] },
       ]
     },
   ];
@@ -127,6 +128,7 @@
       avgMs:           server.avgMs || null,
       dbSizeMB:        sq  ? +sq.dbSizeMB                  : null,
       walSizeMB:       sq  ? +sq.walSizeMB                 : null,
+      wsClients:       server.webSocketClients != null ? server.webSocketClients : null,
       totalObservers:  obs ? obs.total                     : null,
       onlineObservers: obs ? obs.online                    : null,
       staleObservers:  obs ? obs.stale                     : null,

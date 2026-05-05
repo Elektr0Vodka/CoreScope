@@ -729,17 +729,22 @@ func (s *Server) handlePerf(w http.ResponseWriter, r *http.Request) {
 	if s.db != nil {
 		observerCounts, _ = s.db.GetObserverCounts()
 	}
+	wsClients := 0
+	if s.hub != nil {
+		wsClients = s.hub.ClientCount()
+	}
 
 	writeJSON(w, PerfResponse{
-		Uptime:        uptimeSec,
-		TotalRequests: totalRequests,
-		AvgMs:         safeAvg(totalMs, float64(totalRequests)),
-		Endpoints:     summary,
-		SlowQueries:   slowQueries,
-		Cache:          perfCS,
-		PacketStore:    pktStoreStats,
-		Sqlite:         sqliteStats,
-		ObserverCounts: observerCounts,
+		Uptime:           uptimeSec,
+		TotalRequests:    totalRequests,
+		AvgMs:            safeAvg(totalMs, float64(totalRequests)),
+		Endpoints:        summary,
+		SlowQueries:      slowQueries,
+		Cache:            perfCS,
+		PacketStore:      pktStoreStats,
+		Sqlite:           sqliteStats,
+		ObserverCounts:   observerCounts,
+		WebSocketClients: wsClients,
 		GoRuntime: func() *GoRuntimeStats {
 			ms := s.getMemStats()
 			return &GoRuntimeStats{
@@ -802,20 +807,23 @@ func (s *Server) collectPerfSample() PerfSample {
 	s.perfStats.mu.Unlock()
 
 	sample := PerfSample{
-		Ts:           time.Now().UnixMilli(),
-		CpuPercent:   s.getCPUPercent(),
-		TotalSysMB:   float64(ms.Sys) / 1024 / 1024,
-		HeapAllocMB:  float64(ms.HeapAlloc) / 1024 / 1024,
-		HeapInuseMB:  float64(ms.HeapInuse) / 1024 / 1024,
-		HeapSysMB:    float64(ms.HeapSys) / 1024 / 1024,
-		LastPauseMs:  float64(ms.PauseNs[(ms.NumGC+255)%256]) / 1e6,
-		Goroutines:   runtime.NumGoroutine(),
-		PacketsInRAM: packetsInRAM,
-		TrackedMB:    trackedMB,
-		CacheHitRate: cacheHitRate,
-		AvgMs:        avgMs,
-		DbSizeMB:     dbSizeMB,
-		WalSizeMB:    walSizeMB,
+		Ts:              time.Now().UnixMilli(),
+		CpuPercent:      s.getCPUPercent(),
+		TotalSysMB:      float64(ms.Sys) / 1024 / 1024,
+		HeapAllocMB:     float64(ms.HeapAlloc) / 1024 / 1024,
+		HeapInuseMB:     float64(ms.HeapInuse) / 1024 / 1024,
+		HeapSysMB:       float64(ms.HeapSys) / 1024 / 1024,
+		LastPauseMs:     float64(ms.PauseNs[(ms.NumGC+255)%256]) / 1e6,
+		Goroutines:      runtime.NumGoroutine(),
+		PacketsInRAM:    packetsInRAM,
+		TrackedMB:       trackedMB,
+		CacheHitRate:    cacheHitRate,
+		AvgMs:           avgMs,
+		DbSizeMB:        dbSizeMB,
+		WalSizeMB:       walSizeMB,
+	}
+	if s.hub != nil {
+		sample.WSClients = s.hub.ClientCount()
 	}
 	if s.db != nil {
 		if oc, err := s.db.GetObserverCounts(); err == nil {

@@ -221,16 +221,17 @@ type SqliteStats struct {
 }
 
 type PerfResponse struct {
-	Uptime          int                           `json:"uptime"`
-	TotalRequests   int64                         `json:"totalRequests"`
-	AvgMs           float64                       `json:"avgMs"`
-	Endpoints       map[string]*EndpointStatsResp `json:"endpoints"`
-	SlowQueries     []SlowQuery                   `json:"slowQueries"`
-	Cache           PerfCacheStats                `json:"cache"`
-	PacketStore     *PerfPacketStoreStats         `json:"packetStore"`
-	Sqlite          *SqliteStats                  `json:"sqlite"`
-	GoRuntime       *GoRuntimeStats               `json:"goRuntime,omitempty"`
-	ObserverCounts  *ObserverCounts               `json:"observerCounts,omitempty"`
+	Uptime           int                           `json:"uptime"`
+	TotalRequests    int64                         `json:"totalRequests"`
+	AvgMs            float64                       `json:"avgMs"`
+	Endpoints        map[string]*EndpointStatsResp `json:"endpoints"`
+	SlowQueries      []SlowQuery                   `json:"slowQueries"`
+	Cache            PerfCacheStats                `json:"cache"`
+	PacketStore      *PerfPacketStoreStats         `json:"packetStore"`
+	Sqlite           *SqliteStats                  `json:"sqlite"`
+	GoRuntime        *GoRuntimeStats               `json:"goRuntime,omitempty"`
+	ObserverCounts   *ObserverCounts               `json:"observerCounts,omitempty"`
+	WebSocketClients int                           `json:"webSocketClients"`
 }
 
 type ObserverCounts struct {
@@ -273,9 +274,10 @@ type PerfSample struct {
 	AvgMs           float64 `json:"avgMs"`
 	DbSizeMB        float64 `json:"dbSizeMB"`
 	WalSizeMB       float64 `json:"walSizeMB"`
-	TotalObservers  *int    `json:"totalObservers,omitempty"`
-	OnlineObservers *int    `json:"onlineObservers,omitempty"`
-	StaleObservers  *int    `json:"staleObservers,omitempty"`
+	WSClients        int    `json:"wsClients"`
+	TotalObservers   *int   `json:"totalObservers,omitempty"`
+	OnlineObservers  *int   `json:"onlineObservers,omitempty"`
+	StaleObservers   *int   `json:"staleObservers,omitempty"`
 	OfflineObservers *int   `json:"offlineObservers,omitempty"`
 }
 
