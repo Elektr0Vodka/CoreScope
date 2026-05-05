@@ -3672,6 +3672,51 @@ func (s *PacketStore) GetChannels(region string) []map[string]interface{} {
 		})
 	}
 
+	// #688: scan decoded message text for #hashtag mentions and surface any
+	// previously-unseen channel names as discovered channels. We dedup against
+	// channelMap (matched by name) so a channel that already has traffic does
+	// NOT also appear as discovered.
+	discovered := map[string]string{} // name -> lastActivity
+	for _, snap := range snapshots {
+		if !snap.hasRegion {
+			continue
+		}
+		var decoded decodedGrp
+		if json.Unmarshal([]byte(snap.decodedJSON), &decoded) != nil {
+			continue
+		}
+		if decoded.Type != "CHAN" || decoded.Text == "" {
+			continue
+		}
+		if hasGarbageChars(decoded.Text) {
+			continue
+		}
+		for _, tag := range extractHashtagsFromText(decoded.Text) {
+			// Skip if already a known/decoded channel (by name with or without '#').
+			bare := tag[1:]
+			if _, ok := channelMap[tag]; ok {
+				continue
+			}
+			if _, ok := channelMap[bare]; ok {
+				continue
+			}
+			if existing, ok := discovered[tag]; !ok || snap.firstSeen > existing {
+				discovered[tag] = snap.firstSeen
+			}
+		}
+	}
+	for name, lastActivity := range discovered {
+		channels = append(channels, map[string]interface{}{
+			"hash":         name,
+			"name":         name,
+			"lastMessage":  nil,
+			"lastSender":   nil,
+			"messageCount": 0,
+			"lastActivity": lastActivity,
+			"discovered":   true,
+		})
+	}
+
 	s.channelsCacheMu.Lock()
 	s.channelsCacheRes = channels
 	s.channelsCacheKey = cacheKey
@@ -5773,21 +5818,41 @@ func (s *PacketStore) GetAnalyticsHashSizes(region string) map[string]interface{
 
 	result := s.computeAnalyticsHashSizes(region)
 
-	// Add multi-byte capability data (only for unfiltered/global view)
+	// Multi-byte capability is a NODE property (derived from each node's own
+	// adverts), not a function of the observing region. The region filter
+	// should only control which nodes appear in the analytics list, not the
+	// evidence used to classify their capability. Always compute capability
+	// against the GLOBAL advert dataset so a region-filtered view doesn't
+	// downgrade every adopter to "unknown" just because the confirming
+	// advert was heard by an out-of-region observer (#bug: meshat.se/JKG
+	// showed 14 unknown vs 0 unknown unfiltered).
+	globalAdopterHS := make(map[string]int)
 	if region == "" {
-		// Pass adopter hash sizes so capability can cross-reference
-		adopterHS := make(map[string]int)
 		if mbNodes, ok := result["multiByteNodes"].([]map[string]interface{}); ok {
 			for _, n := range mbNodes {
 				pk, _ := n["pubkey"].(string)
 				hs, _ := n["hashSize"].(int)
 				if pk != "" && hs >= 2 {
-					adopterHS[pk] = hs
+					globalAdopterHS[pk] = hs
 				}
 			}
 		}
-		result["multiByteCapability"] = s.computeMultiByteCapability(adopterHS)
+	} else {
+		// Pull the global multiByteNodes set without the region filter.
+		// Use a separate compute call (not the cached path) to avoid
+		// recursive locking on hashCache and to keep this side-effect free.
+		globalRes := s.computeAnalyticsHashSizes("")
+		if mbNodes, ok := globalRes["multiByteNodes"].([]map[string]interface{}); ok {
+			for _, n := range mbNodes {
+				pk, _ := n["pubkey"].(string)
+				hs, _ := n["hashSize"].(int)
+				if pk != "" && hs >= 2 {
+					globalAdopterHS[pk] = hs
+				}
+			}
+		}
 	}
+	result["multiByteCapability"] = s.computeMultiByteCapability(globalAdopterHS)
 
 	s.cacheMu.Lock()
 	s.hashCache[region] = &cachedResult{data: result, expiresAt: time.Now().Add(s.rfCacheTTL)}

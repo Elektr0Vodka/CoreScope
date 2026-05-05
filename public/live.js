@@ -26,6 +26,33 @@
   let colorByHash = localStorage.getItem('meshcore-color-packets-by-hash') !== 'false';
   /** Current theme string for hash-color functions. */
   function _liveTheme() { return document.documentElement.dataset.theme || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'); }
+  let nodeFilterKeys = (localStorage.getItem('live-node-filter') || '').split(',').map(s => s.trim()).filter(Boolean);
+  let nodeFilterTotal = 0;
+  let nodeFilterShown = 0;
+  // Region filter (#1045): observer_id → IATA code, populated from /api/observers
+  let observerIataMap = {};
+  let regionFilterChangeHandler = null;
+
+  /**
+   * Returns true if the packet group matches the selected regions.
+   * - selected null/empty → no filter active, always true.
+   * - Match if ANY observation's observer maps to an IATA in selected (case-insensitive).
+   * Pure helper exposed for unit tests.
+   */
+  function packetMatchesRegion(packets, obsMap, selected) {
+    if (!selected || !selected.length) return true;
+    if (!packets || !packets.length) return false;
+    const sel = selected.map(function(s) { return String(s).toUpperCase(); });
+    for (var i = 0; i < packets.length; i++) {
+      var oid = packets[i] && packets[i].observer_id;
+      if (oid == null) continue;
+      var iata = obsMap && obsMap[oid];
+      if (!iata) continue;
+      if (sel.indexOf(String(iata).toUpperCase()) !== -1) return true;
+    }
+    return false;
+  }
+  function setObserverIataMap(m) { observerIataMap = m || {}; }
   let rainCanvas = null, rainCtx = null, rainDrops = [], rainRAF = null;
   const propagationBuffer = new Map(); // hash -> {timer, packets[]}
   let _onResize = null;
@@ -840,9 +867,7 @@
             <label><input type="checkbox" id="liveFavoritesToggle" aria-describedby="favDesc"> ⭐ Favorites</label>
             <span id="favDesc" class="sr-only">Show only favorited and claimed nodes</span>
             <label id="liveGeoFilterLabel" style="display:none"><input type="checkbox" id="liveGeoFilterToggle"> Mesh live area</label>
-            <input type="search" id="liveNodeFilter" class="live-node-filter" placeholder="Filter nodes…"
-              value="${escapeHtml(nodeFilterText)}" autocomplete="off" spellcheck="false"
-              aria-label="Filter nodes by name">
+            <div id="liveRegionFilter" class="region-filter-container live-region-filter-container" aria-label="Filter live packets by IATA region"></div>
           </div>
           <div class="audio-controls hidden" id="audioControls">
             <label class="audio-slider-label">Voice <select id="audioVoiceSelect" class="audio-voice-select"></select></label>
@@ -1008,12 +1033,53 @@
       applyFavoritesFilter();
     });
 
-    const nodeFilterInput = document.getElementById('liveNodeFilter');
-    nodeFilterInput.addEventListener('input', (e) => {
-      nodeFilterText = e.target.value.trim();
-      try { localStorage.setItem('live-node-filter', nodeFilterText); } catch (_) {}
-      applyNodeFilter();
-    });
+    // Region filter (#1045): dropdown of observer IATA regions
+    (function initLiveRegionFilter() {
+      var rfEl = document.getElementById('liveRegionFilter');
+      if (!rfEl || !window.RegionFilter) return;
+      // Fetch observer roster to build observer_id → IATA map
+      fetch('/api/observers').then(function(r) { return r.json(); }).then(function(list) {
+        var m = {};
+        if (Array.isArray(list)) {
+          for (var i = 0; i < list.length; i++) {
+            var o = list[i];
+            if (o && o.id != null && o.iata) m[o.id] = o.iata;
+          }
+        }
+        setObserverIataMap(m);
+      }).catch(function() { /* leave map empty; filter will hide all when active */ });
+      RegionFilter.init(rfEl, { dropdown: true });
+      regionFilterChangeHandler = RegionFilter.onChange(function() { /* selection persisted by RegionFilter; future packets reflect it */ });
+    })();
+
+    // Node filter input
+    const nodeFilterInput = document.getElementById('liveNodeFilterInput');
+    const nodeFilterClear = document.getElementById('liveNodeFilterClear');
+    if (nodeFilterInput) {
+      // Restore from URL param or localStorage
+      const urlNode = getHashParams && getHashParams().get('node');
+      if (urlNode) setNodeFilter(urlNode.split(',').map(s => s.trim()).filter(Boolean));
+      else if (nodeFilterKeys.length) updateNodeFilterUI();
+
+      nodeFilterInput.addEventListener('change', (e) => {
+        const val = e.target.value.trim();
+        setNodeFilter(val ? val.split(',').map(s => s.trim()).filter(Boolean) : []);
+        const params = getHashParams ? getHashParams() : new URLSearchParams();
+        if (nodeFilterKeys.length) params.set('node', nodeFilterKeys.join(','));
+        else params.delete('node');
+        const base = location.hash.split('?')[0];
+        const qs = params.toString();
+        location.hash = base + (qs ? '?' + qs : '');
+      });
+    }
+    if (nodeFilterClear) {
+      nodeFilterClear.addEventListener('click', () => {
+        if (nodeFilterInput) nodeFilterInput.value = '';
+        setNodeFilter([]);
+        const base = location.hash.split('?')[0];
+        location.hash = base;
+      });
+    }
 
     // Geo filter overlay
     (async function () {
@@ -1954,6 +2020,11 @@
   window._liveGetFavoritePubkeys = getFavoritePubkeys;
   window._livePacketInvolvesFavorite = packetInvolvesFavorite;
   window._liveIsNodeFavorited = isNodeFavorited;
+  window._livePacketInvolvesFilterNode = packetInvolvesFilterNode;
+  window._liveGetNodeFilterKeys = function() { return nodeFilterKeys; };
+  window._livePacketMatchesRegion = packetMatchesRegion;
+  window._liveSetObserverIataMap = setObserverIataMap;
+  window._liveSetNodeFilter = setNodeFilter;
   window._liveFormatLiveTimestampHtml = formatLiveTimestampHtml;
   window._liveResolveHopPositions = resolveHopPositions;
   window._liveVcrSpeedCycle = vcrSpeedCycle;
@@ -2045,6 +2116,12 @@
     if (showOnlyFavorites && !packets.some(function(p) { return packetInvolvesFavorite(p); })) return;
     // --- Node name filter ---
     if (nodeFilterText && !packets.some(function(p) { return packetInvolvesFilteredNode(p); })) return;
+
+    // --- Region filter (#1045): drop packet if no observation matches selected IATA ---
+    if (window.RegionFilter && typeof RegionFilter.getSelected === 'function') {
+      var _regionSel = RegionFilter.getSelected();
+      if (_regionSel && _regionSel.length && !packetMatchesRegion(packets, observerIataMap, _regionSel)) return;
+    }
 
     // --- Ensure ADVERT nodes appear on map ---
     for (var pi = 0; pi < packets.length; pi++) {
@@ -3032,6 +3109,10 @@
     if (_feedTimestampInterval) { clearInterval(_feedTimestampInterval); _feedTimestampInterval = null; }
     if (_affinityInterval) { clearInterval(_affinityInterval); _affinityInterval = null; }
     if (ws) { ws.onclose = null; ws.close(); ws = null; }
+    if (regionFilterChangeHandler && window.RegionFilter && typeof RegionFilter.offChange === 'function') {
+      RegionFilter.offChange(regionFilterChangeHandler);
+      regionFilterChangeHandler = null;
+    }
     if (map) { map.remove(); map = null; }
     if (_onResize) {
       window.removeEventListener('resize', _onResize);

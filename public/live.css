@@ -309,6 +309,10 @@
 .live-node-filter::placeholder { color: var(--text-muted); opacity: 0.7; }
 .live-node-filter::-webkit-search-cancel-button { cursor: pointer; }
 
+/* Region filter (#1045) inline in live header toggles */
+.live-toggles .live-region-filter-container { display: inline-flex; align-items: center; }
+.live-toggles .live-region-filter-container .region-dropdown-trigger { font-size: inherit; padding: 2px 6px; }
+
 /* ---- Leaflet overrides for dark theme ---- */
 .live-page .leaflet-control-zoom a {
   background: color-mix(in srgb, var(--surface-1) 92%, transparent) !important;

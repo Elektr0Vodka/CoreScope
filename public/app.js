@@ -501,6 +501,166 @@ function connectWS() {
 function onWS(fn) { wsListeners.push(fn); }
 function offWS(fn) { wsListeners = wsListeners.filter(f => f !== fn); }
 
+// --- Pull-to-reconnect (#1063) ---
+// Touch-device pull-down at scrollTop=0 reconnects the WebSocket
+// (instead of triggering native pull-to-refresh full-page reload).
+// Visual indicator pulses during pull; toast confirms result.
+const PULL_THRESHOLD_PX = 140;
+let _pullToast = null;
+let _pullToastTimer = null;
+let _pullIndicator = null;
+
+function _ensurePullIndicator() {
+  if (_pullIndicator && document.body && typeof document.body.contains === 'function' && document.body.contains(_pullIndicator)) return _pullIndicator;
+  if (_pullIndicator) return _pullIndicator;
+  const el = document.createElement('div');
+  el.id = 'pullReconnectIndicator';
+  el.setAttribute('aria-hidden', 'true');
+  el.innerHTML = '<span class="prr-icon">⟳</span>';
+  el.style.cssText = [
+    'position:fixed', 'top:0', 'left:50%', 'transform:translate(-50%,-100%)',
+    'z-index:99999', 'padding:8px 14px', 'border-radius:0 0 12px 12px',
+    'background:var(--accent,#2563eb)', 'color:#fff', 'font:14px/1 var(--font,system-ui)',
+    'box-shadow:0 2px 8px rgba(0,0,0,.2)', 'pointer-events:none',
+    'transition:transform .15s ease, opacity .15s ease', 'opacity:0',
+  ].join(';');
+  document.body.appendChild(el);
+  _pullIndicator = el;
+  return el;
+}
+
+function _showPullToast(msg, ok) {
+  try {
+    if (_pullToast && _pullToast.remove) _pullToast.remove();
+  } catch (e) {}
+  if (_pullToastTimer) { try { clearTimeout(_pullToastTimer); } catch (e) {} _pullToastTimer = null; }
+  const el = document.createElement('div');
+  el.className = 'pull-reconnect-toast';
+  el.textContent = msg;
+  el.style.cssText = [
+    'position:fixed', 'top:12px', 'left:50%', 'transform:translateX(-50%)',
+    'z-index:99999', 'padding:8px 16px', 'border-radius:8px',
+    'background:' + (ok ? 'var(--status-green,#16a34a)' : 'var(--status-red,#dc2626)'),
+    'color:#fff', 'font:14px/1.2 var(--font,system-ui)',
+    'box-shadow:0 2px 8px rgba(0,0,0,.2)', 'pointer-events:none',
+  ].join(';');
+  document.body.appendChild(el);
+  _pullToast = el;
+  _pullToastTimer = setTimeout(function () {
+    _pullToastTimer = null;
+    try { el.remove(); } catch (e) {}
+  }, 1800);
+}
+
+function pullReconnect() {
+  // If WS is connected (readyState OPEN), give a brief "Connected ✓"
+  // confirmation but still cycle so the user sees fresh data.
+  const wasOpen = ws && ws.readyState === 1;
+  if (wasOpen) {
+    _showPullToast('Connected ✓', true);
+    // Fast cycle: close and let onclose reconnect immediately
+    try { ws.close(); } catch (e) {}
+  } else {
+    _showPullToast('Reconnecting…', true);
+    try { if (ws) ws.close(); } catch (e) {}
+    // onclose handler schedules reconnect; force one now in case ws was null
+    try { connectWS(); } catch (e) {}
+  }
+}
+
+function _isTouchDevice() {
+  try {
+    return ('ontouchstart' in window) ||
+      (navigator && (navigator.maxTouchPoints > 0 || navigator.msMaxTouchPoints > 0));
+  } catch (e) { return false; }
+}
+
+function setupPullToReconnect() {
+  // Always attach listeners (tests + future-proof). Inside the handler we
+  // gate on _isTouchDevice() AND scrollTop=0 so desktop/scrolled pages are
+  // unaffected.
+  let startY = null;
+  let pulling = false;
+  let dist = 0;
+
+  function getScrollTop() {
+    return (document.documentElement && document.documentElement.scrollTop) ||
+      (document.body && document.body.scrollTop) || 0;
+  }
+
+  function onStart(e) {
+    if (!_isTouchDevice()) return;
+    // Strict scrollTop === 0: ignore any negative overscroll, ignore any scrolled state
+    if (getScrollTop() !== 0) { startY = null; pulling = false; return; }
+    const t = e.touches && e.touches[0];
+    startY = t ? t.clientY : null;
+    pulling = false;
+    dist = 0;
+  }
+
+  function onMove(e) {
+    if (startY == null) return;
+    // Cancel gesture if scrollTop leaves 0 (page scrolled mid-pull)
+    if (getScrollTop() !== 0) { startY = null; pulling = false; dist = 0; return; }
+    const t = e.touches && e.touches[0];
+    if (!t) return;
+    const dy = t.clientY - startY;
+    if (dy <= 0) {
+      // Upward swipe / retract. If we were past the commit threshold and the
+      // user retracts back, cancel the gesture so a subsequent touchend does
+      // NOT fire reconnect.
+      if (pulling) {
+        pulling = false;
+        dist = 0;
+        if (_pullIndicator) {
+          _pullIndicator.style.opacity = '0';
+          _pullIndicator.style.transform = 'translate(-50%, -100%)';
+        }
+      }
+      return;
+    }
+    dist = dy;
+    if (dy > 8) {
+      pulling = true;
+      const ind = _ensurePullIndicator();
+      const pct = Math.min(1, dy / PULL_THRESHOLD_PX);
+      ind.style.opacity = String(pct);
+      ind.style.transform = 'translate(-50%, ' + (-100 + pct * 100) + '%)';
+      const icon = ind.querySelector && ind.querySelector('.prr-icon');
+      if (icon) icon.style.transform = 'rotate(' + Math.round(pct * 360) + 'deg)';
+      // Only block native pull-to-refresh once we've crossed the commit
+      // threshold — below that, let the browser handle natural scroll/bounce.
+      if (dy >= PULL_THRESHOLD_PX && typeof e.preventDefault === 'function' && e.cancelable !== false) {
+        try { e.preventDefault(); } catch (_) {}
+      }
+    }
+  }
+
+  function onEnd() {
+    const wasPulling = pulling;
+    const finalDist = dist;
+    const stillAtTop = getScrollTop() === 0;
+    startY = null; pulling = false; dist = 0;
+    if (_pullIndicator) {
+      _pullIndicator.style.opacity = '0';
+      _pullIndicator.style.transform = 'translate(-50%, -100%)';
+    }
+    // Trigger only if: gesture was active, crossed threshold, and page is still at scrollTop=0.
+    if (wasPulling && finalDist >= PULL_THRESHOLD_PX && stillAtTop) {
+      try { (window.pullReconnect || pullReconnect)(); } catch (e) {}
+    }
+  }
+
+  document.addEventListener('touchstart', onStart, { passive: true });
+  document.addEventListener('touchmove', onMove, { passive: false });
+  document.addEventListener('touchend', onEnd, { passive: true });
+  document.addEventListener('touchcancel', onEnd, { passive: true });
+}
+
+window.pullReconnect = pullReconnect;
+window.setupPullToReconnect = setupPullToReconnect;
+window.connectWS = connectWS;
+
 /* Global escapeHtml — used by multiple pages */
 function escapeHtml(s) {
   if (s == null) return '';
@@ -576,6 +736,14 @@ function navigate() {
   // Backward-compat redirect: #/traces/<hash> → #/tools/trace/<hash> (issue #944).
   if (location.hash.startsWith('#/traces/')) {
     location.hash = location.hash.replace('#/traces/', '#/tools/trace/');
+    return;
+  }
+
+  // Backward-compat redirect: #/roles → #/analytics?tab=roles (issue #1085).
+  // The Roles page was folded into the Analytics tab strip; old links and
+  // bookmarks must keep working.
+  if (location.hash === '#/roles' || location.hash.startsWith('#/roles?') || location.hash.startsWith('#/roles/')) {
+    location.hash = '#/analytics?tab=roles';
     return;
   }
 
@@ -676,6 +844,7 @@ window.addEventListener('timestamp-mode-changed', () => {
 });
 window.addEventListener('DOMContentLoaded', () => {
   connectWS();
+  setupPullToReconnect();
 
   // --- Dark Mode ---
   const darkToggle = document.getElementById('darkModeToggle');

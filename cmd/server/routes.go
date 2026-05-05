@@ -161,6 +161,7 @@ func (s *Server) RegisterRoutes(r *mux.Router) {
 	r.HandleFunc("/api/nodes/{pubkey}/health", s.handleNodeHealth).Methods("GET")
 	r.HandleFunc("/api/nodes/{pubkey}/paths", s.handleNodePaths).Methods("GET")
 	r.HandleFunc("/api/nodes/{pubkey}/analytics", s.handleNodeAnalytics).Methods("GET")
+	r.HandleFunc("/api/nodes/{pubkey}/battery", s.handleNodeBattery).Methods("GET")
 	r.HandleFunc("/api/nodes/clock-skew", s.handleFleetClockSkew).Methods("GET")
 	r.HandleFunc("/api/nodes/{pubkey}/clock-skew", s.handleNodeClockSkew).Methods("GET")
 	r.HandleFunc("/api/observers/clock-skew", s.handleObserverClockSkew).Methods("GET")
@@ -1195,16 +1196,37 @@ func (s *Server) handleNodes(w http.ResponseWriter, r *http.Request) {
 	if s.store != nil {
 		hashInfo := s.store.GetNodeHashSizeInfo()
 		mbCap := s.store.GetMultiByteCapMap()
+		relayWindow := s.cfg.GetHealthThresholds().RelayActiveHours
 		for _, node := range nodes {
 			if pk, ok := node["public_key"].(string); ok {
 				EnrichNodeWithHashSize(node, hashInfo[pk])
 				EnrichNodeWithMultiByte(node, mbCap[pk])
+				if role, _ := node["role"].(string); role == "repeater" || role == "room" {
+					info := s.store.GetRepeaterRelayInfo(pk, relayWindow)
+					if info.LastRelayed != "" {
+						node["last_relayed"] = info.LastRelayed
+					}
+					node["relay_active"] = info.RelayActive
+					node["relay_count_1h"] = info.RelayCount1h
+					node["relay_count_24h"] = info.RelayCount24h
+					node["usefulness_score"] = s.store.GetRepeaterUsefulnessScore(pk)
+				}
 			}
 		}
 	}
 	if s.cfg.GeoFilter != nil {
 		filtered := nodes[:0]
 		for _, node := range nodes {
+			// Foreign-flagged nodes (#730) are kept even when their GPS lies
+			// outside the geofilter polygon — that's the whole point of the
+			// flag: operators need to SEE bridged/leaked nodes, not have them
+			// filtered away. The ingestor sets foreign_advert=1 when its
+			// configured geo_filter rejected the advert; the server must
+			// surface those.
+			if isForeign, _ := node["foreign"].(bool); isForeign {
+				filtered = append(filtered, node)
+				continue
+			}
 			if NodePassesGeoFilter(node["lat"], node["lon"], s.cfg.GeoFilter) {
 				filtered = append(filtered, node)
 			}
@@ -1295,6 +1317,18 @@ func (s *Server) handleNodeDetail(w http.ResponseWriter, r *http.Request) {
 		EnrichNodeWithHashSize(node, hashInfo[pubkey])
 		mbCap := s.store.GetMultiByteCapMap()
 		EnrichNodeWithMultiByte(node, mbCap[pubkey])
+		if role, _ := node["role"].(string); role == "repeater" || role == "room" {
+			ht := s.cfg.GetHealthThresholds()
+			info := s.store.GetRepeaterRelayInfo(pubkey, ht.RelayActiveHours)
+			if info.LastRelayed != "" {
+				node["last_relayed"] = info.LastRelayed
+			}
+			node["relay_active"] = info.RelayActive
+			node["relay_window_hours"] = info.WindowHours
+			node["relay_count_1h"] = info.RelayCount1h
+			node["relay_count_24h"] = info.RelayCount24h
+			node["usefulness_score"] = s.store.GetRepeaterUsefulnessScore(pubkey)
+		}
 	}
 
 	name := ""
