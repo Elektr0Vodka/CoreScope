@@ -193,8 +193,47 @@ async function main() {
     console.log(`  ❌ active-mirror @800 #/observers: ${mirrorReasons.join(' | ')}`);
   }
 
+  await page.click('#navMoreBtn');
+  await page.evaluate(() => new Promise(r => requestAnimationFrame(r)));
+  const menuClip = await page.evaluate(() => {
+    const nav = document.querySelector('.top-nav');
+    const menu = document.getElementById('navMoreMenu');
+    if (!nav || !menu) return { missing: true };
+    const navRect = nav.getBoundingClientRect();
+    const menuRect = menu.getBoundingClientRect();
+    return {
+      missing: false,
+      position: getComputedStyle(menu).position,
+      navBottom: navRect.bottom,
+      menuTop: menuRect.top,
+      menuBottom: menuRect.bottom,
+      menuHeight: menuRect.height,
+    };
+  });
+  const clipReasons = [];
+  if (menuClip.missing) {
+    clipReasons.push('missing nav or More menu element');
+  } else {
+    if (menuClip.position !== 'fixed') {
+      clipReasons.push(`More menu should use fixed positioning, got ${menuClip.position}`);
+    }
+    if (menuClip.menuTop < menuClip.navBottom - 1) {
+      clipReasons.push(`More menu starts inside the navbar (top=${menuClip.menuTop}, navBottom=${menuClip.navBottom})`);
+    }
+    if (menuClip.menuHeight < 40 || menuClip.menuBottom <= menuClip.navBottom + 24) {
+      clipReasons.push(`More menu appears clipped at navbar edge (height=${menuClip.menuHeight}, bottom=${menuClip.menuBottom}, navBottom=${menuClip.navBottom})`);
+    }
+  }
+  if (clipReasons.length === 0) {
+    passes++;
+    console.log(`  ✅ dropdown-escape @800: More menu renders below navbar without edge clipping`);
+  } else {
+    failures++;
+    console.log(`  ❌ dropdown-escape @800: ${clipReasons.join(' | ')}`);
+  }
+
   await browser.close();
-  console.log(`\ntest-nav-priority-1102-e2e.js: ${failures === 0 ? 'OK' : 'FAIL'} — ${passes}/${CASES.length + 1} passed`);
+  console.log(`\ntest-nav-priority-1102-e2e.js: ${failures === 0 ? 'OK' : 'FAIL'} — ${passes}/${CASES.length + 2} passed`);
   process.exit(failures === 0 ? 0 : 1);
 }
 

@@ -973,6 +973,19 @@ window.addEventListener('DOMContentLoaded', () => {
       navMoreBtn.classList.toggle('active', !!hasActiveMore);
     }
 
+    function positionMoreMenu() {
+      if (!navMoreMenu.classList.contains('open')) return;
+      const btnRect = navMoreBtn.getBoundingClientRect();
+      const topRect = navTop.getBoundingClientRect();
+      const gutter = 8;
+      const menuW = Math.max(navMoreMenu.offsetWidth || 0, navMoreBtn.offsetWidth || 0, 160);
+      const left = Math.max(gutter, Math.min(btnRect.right - menuW, window.innerWidth - menuW - gutter));
+      navMoreMenu.style.left = left + 'px';
+      navMoreMenu.style.top = Math.max(topRect.bottom, btnRect.bottom) + 'px';
+      navMoreMenu.style.right = 'auto';
+      navMoreMenu.style.minWidth = Math.ceil(Math.max(navMoreBtn.offsetWidth, 160)) + 'px';
+    }
+
     // #1105 MINOR 1: cached intrinsic width of the More button. Captured
     // the first time `fits()` sees navMoreWrap rendered (display:flex).
     // Falls back to MORE_BTN_RESERVE_PX (a conservative initial guess
@@ -1073,10 +1086,13 @@ window.addEventListener('DOMContentLoaded', () => {
       navMoreMenu.classList.toggle('open');
       navMoreBtn.setAttribute('aria-expanded', String(opening));
       if (opening) {
+        positionMoreMenu();
         var firstLink = navMoreMenu.querySelector('.nav-link');
         if (firstLink) firstLink.focus();
       }
     });
+    window.addEventListener('scroll', positionMoreMenu, { passive: true });
+    window.addEventListener('resize', positionMoreMenu);
   }
 
   document.addEventListener('keydown', (e) => {

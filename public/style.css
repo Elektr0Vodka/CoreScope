@@ -1325,10 +1325,11 @@ button.ch-item:hover .ch-icon-btn { opacity: 1; }
 .nav-more-wrap { display: none; position: relative; }
 .nav-more-btn { display: inline-flex; }
 .nav-more-menu {
-  display: none; position: absolute; top: calc(var(--top-nav-h, 52px) - 4px); right: 0;
+  display: none; position: fixed; top: var(--top-nav-h, 52px); right: var(--gutter);
   background: var(--nav-bg); border: 1px solid var(--border); border-radius: 8px;
   box-shadow: 0 4px 12px rgba(0,0,0,0.15); flex-direction: column;
   min-width: 160px; padding: 4px 0; z-index: 1200;
+  max-height: calc(100dvh - var(--top-nav-h, 52px) - 8px); overflow-y: auto;
 }
 .nav-more-menu.open { display: flex; }
 .nav-more-menu .nav-link {
