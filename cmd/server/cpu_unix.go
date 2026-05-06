@@ -3,6 +3,7 @@
 package main
 
 import (
+	"runtime"
 	"syscall"
 	"time"
 )
@@ -41,7 +42,9 @@ func (s *Server) getCPUPercent() float64 {
 	if wallNs <= 0 {
 		return 0
 	}
-	pct := cpuDeltaNs / wallNs * 100.0
+	// Divide by NumCPU to normalise to 0–100 % (per-logical-core average).
+	// Without this, a 6-core machine running at 1 CPU fully saturated reports 600 %.
+	pct := cpuDeltaNs / wallNs * 100.0 / float64(runtime.NumCPU())
 	if pct < 0 {
 		return 0
 	}
