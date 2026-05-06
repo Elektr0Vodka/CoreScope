@@ -29,7 +29,15 @@ function makeLeafletShim() {
     const g = { _layers: [], addLayer(m){ this._layers.push(m); return this; }, removeLayer(m){ const i=this._layers.indexOf(m); if(i>=0) this._layers.splice(i,1); return this; }, clearLayers(){ this._layers=[]; return this; }, eachLayer(fn){ this._layers.forEach(fn); }, addTo(){ return this; }, hasLayer(m){ return this._layers.includes(m); } };
     return g;
   };
-  L.marker = (latlng, opts) => ({ _isMarker: true, _latlng: latlng, options: opts || {}, getLatLng(){ return this._latlng; }, bindPopup(){ return this; }, bindTooltip(){ return this; } });
+  L.marker = (latlng, opts) => ({
+    _isMarker: true,
+    _latlng: latlng,
+    options: opts || {},
+    getLatLng(){ return this._latlng; },
+    bindPopup(){ return this; },
+    bindTooltip(){ return this; },
+    openPopup(){ this._popupOpened = true; return this; },
+  });
   // markercluster shim
   function MarkerClusterGroup(opts) {
     this.options = opts || {};
@@ -82,6 +90,8 @@ console.log('\n=== map.js: clustering ===');
     assert.ok(internals, 'window.__meshcoreMapInternals not exposed by map.js');
     assert.ok(typeof internals.makeClusterIcon === 'function', 'makeClusterIcon not exported');
     assert.ok(typeof internals.createClusterGroup === 'function', 'createClusterGroup not exported');
+    assert.ok(typeof internals.captureOpenMarkerPopup === 'function', 'captureOpenMarkerPopup not exported');
+    assert.ok(typeof internals.restoreOpenMarkerPopup === 'function', 'restoreOpenMarkerPopup not exported');
   });
 
   test('createClusterGroup returns an L.MarkerClusterGroup with required options', () => {
@@ -132,6 +142,41 @@ console.log('\n=== map.js: clustering ===');
     assert.ok(/mc-sm/.test(small.html || small.className || ''), 'small bucket missing');
     assert.ok(/mc-md/.test(med.html || med.className || ''), 'medium bucket missing');
     assert.ok(/mc-lg/.test(large.html || large.className || ''), 'large bucket missing');
+  });
+
+  test('preserves an open marker popup across full marker rerenders', () => {
+    const openMarker = ctx.L.marker(ctx.L.latLng(37.7, -122.4));
+    openMarker._nodeKey = 'node-a';
+    const mapRef = { _popup: { _source: openMarker } };
+    const state = internals.captureOpenMarkerPopup(mapRef);
+
+    const rebuiltMarker = ctx.L.marker(ctx.L.latLng(37.7, -122.4));
+    rebuiltMarker._nodeKey = 'node-a';
+    const otherMarker = ctx.L.marker(ctx.L.latLng(37.8, -122.5));
+    otherMarker._nodeKey = 'node-b';
+    const layer = ctx.L.layerGroup();
+    layer.addLayer(otherMarker);
+    layer.addLayer(rebuiltMarker);
+
+    assert.ok(state, 'popup state should be captured');
+    assert.strictEqual(state.nodeKey, 'node-a');
+    assert.strictEqual(internals.restoreOpenMarkerPopup(state, layer, null), true);
+    assert.strictEqual(rebuiltMarker._popupOpened, true, 'matching rebuilt marker should reopen its popup');
+    assert.strictEqual(otherMarker._popupOpened, undefined, 'non-matching marker should not open');
+  });
+
+  test('preserves an open marker popup when restored from the cluster layer', () => {
+    const openMarker = ctx.L.marker(ctx.L.latLng(37.7, -122.4));
+    openMarker._nodeKey = 'node-a';
+    const state = internals.captureOpenMarkerPopup({ _popup: { _source: openMarker } });
+
+    const rebuiltMarker = ctx.L.marker(ctx.L.latLng(37.7, -122.4));
+    rebuiltMarker._nodeKey = 'node-a';
+    const cluster = internals.createClusterGroup();
+    cluster.addLayer(rebuiltMarker);
+
+    assert.strictEqual(internals.restoreOpenMarkerPopup(state, null, cluster), true);
+    assert.strictEqual(rebuiltMarker._popupOpened, true, 'matching clustered marker should reopen its popup');
   });
 }
 

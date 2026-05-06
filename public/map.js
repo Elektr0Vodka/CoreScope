@@ -843,7 +843,43 @@
   function renderMarkers() {
     if (_renderingMarkers) return;
     _renderingMarkers = true;
-    try { _renderMarkersInner(); } finally { _renderingMarkers = false; }
+    try {
+      var popupState = _captureOpenMarkerPopup(map);
+      _renderMarkersInner();
+      _restoreOpenMarkerPopup(popupState, markerLayer, clusterGroup);
+    } finally { _renderingMarkers = false; }
+  }
+
+  function _captureOpenMarkerPopup(mapRef) {
+    if (!mapRef || !mapRef._popup || !mapRef._popup._source) return null;
+    var source = mapRef._popup._source;
+    var key = source._nodeKey || null;
+    if (!key) return null;
+    return { nodeKey: key };
+  }
+
+  function _restoreOpenMarkerPopup(state, plainLayer, clusteredLayer) {
+    if (!state || !state.nodeKey) return false;
+    var targetKey = state.nodeKey;
+    var found = false;
+    var tryMarker = function (m) {
+      if (found || !m) return;
+      if (m._nodeKey === targetKey && m.openPopup) {
+        m.openPopup();
+        found = true;
+      }
+    };
+    var findIn = function (layer) {
+      if (found || !layer) return;
+      if (layer.eachLayer) layer.eachLayer(tryMarker);
+      if (!found && layer.getLayers) {
+        var layers = layer.getLayers();
+        for (var i = 0; i < layers.length && !found; i++) tryMarker(layers[i]);
+      }
+    };
+    findIn(plainLayer);
+    findIn(clusteredLayer);
+    return found;
   }
 
   function _renderMarkersInner() {
@@ -1427,6 +1463,11 @@
   }
 
   if (typeof window !== 'undefined') {
-    window.__meshcoreMapInternals = { createClusterGroup: createClusterGroup, makeClusterIcon: makeClusterIcon };
+    window.__meshcoreMapInternals = {
+      createClusterGroup: createClusterGroup,
+      makeClusterIcon: makeClusterIcon,
+      captureOpenMarkerPopup: _captureOpenMarkerPopup,
+      restoreOpenMarkerPopup: _restoreOpenMarkerPopup,
+    };
   }
 })();
