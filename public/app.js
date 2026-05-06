@@ -1073,6 +1073,13 @@ window.addEventListener('DOMContentLoaded', () => {
       if (rafId) cancelAnimationFrame(rafId);
       rafId = requestAnimationFrame(applyNavPriority);
     });
+    // Re-measure when nav-right grows (e.g. nav-stats populated after fetch).
+    if (window.ResizeObserver) {
+      new ResizeObserver(function() {
+        if (rafId) cancelAnimationFrame(rafId);
+        rafId = requestAnimationFrame(applyNavPriority);
+      }).observe(navRightEl);
+    }
     // Re-apply on route change too: the active link gets bigger padding
     // (background pill), so which links fit can shift between pages.
     window.addEventListener('hashchange', function() {
