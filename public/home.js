@@ -10,7 +10,7 @@
   const MY_NODES_KEY = 'meshcore-my-nodes'; // [{pubkey, name, addedAt}]
   const ANNOUNCEMENT_LANG_KEY = 'home-announcement-lang';
   const ANNOUNCEMENT_COLLAPSED_KEY = 'home-announcement-collapsed';
-  const TOOLBOX_URL = 'https://dutch-meshcore.github.io/Dutch-Meshcore-Toolbox/#/';
+  const DMC_URL = 'https://dutchmeshcore.nl';
   const DISCORD_URL = 'https://discord.gg/HfJVk9J29K';
 
   function getMyNodes() {
@@ -193,7 +193,7 @@
           <p data-announcement-copy="nl">Heb jij jouw observers al omgezet naar de dutchmeshcore.nl servers? De Cornmeister MQTT komt binnenkort te vervallen.</p>
           <p data-announcement-copy="en">Have you already moved your observers to the dutchmeshcore.nl servers? The Cornmeister MQTT server will be retired soon.</p>
           <div class="home-announcement-actions">
-            <a href="${TOOLBOX_URL}" target="_blank" rel="noopener" class="home-announcement-primary">
+            <a href="${DMC_URL}" target="_blank" rel="noopener" class="home-announcement-primary">
               <span data-announcement-action="nl">Klik hier voor meer info</span>
               <span data-announcement-action="en">Click here for more info</span>
             </a>
