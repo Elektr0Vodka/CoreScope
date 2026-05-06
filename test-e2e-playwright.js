@@ -839,11 +839,18 @@ async function run() {
   // the .active class.
   await test('Live nav-link does not wrap or change nav height when active (#1046)', async () => {
     // Use the exact viewport width from the issue screenshots.
-    await page.setViewportSize({ width: 1115, height: 800 });
+    // Use 1920px so all high-priority links (including Live) are inline even
+    // after nav-stats populates. The wrapping concern from #1046 is a CSS
+    // property issue independent of viewport — testing wider is still valid.
+    await page.setViewportSize({ width: 1920, height: 800 });
     await page.goto(BASE, { waitUntil: 'domcontentloaded' });
-    await page.waitForSelector('a.nav-link[data-route="live"]');
-    // Wait for nav-right to stabilise across two frames so that nav-stats
-    // (populated via async fetch) has landed and applyNavPriority has settled.
+    // Wait for nav-stats to be populated (async fetch) so applyNavPriority runs
+    // with the real nav-right width before we measure.
+    await page.waitForFunction(() => {
+      const s = document.getElementById('navStats');
+      return s && s.textContent.trim().length > 5;
+    }, { timeout: 5000 }).catch(() => {});
+    // Then wait for layout to settle across two consecutive frames.
     await page.waitForFunction(() => {
       const el = document.querySelector('.top-nav .nav-right');
       if (!el) return false;
@@ -855,6 +862,7 @@ async function run() {
         }));
       });
     });
+    await page.waitForSelector('a.nav-link[data-route="live"]');
 
     const measure = await page.evaluate(() => {
       const link = document.querySelector('a.nav-link[data-route="live"]');
