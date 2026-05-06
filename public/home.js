@@ -169,12 +169,15 @@
     return `
       <section class="home-announcement-modal" id="homeAnnouncement" role="dialog" aria-labelledby="homeAnnouncementTitle" aria-describedby="homeAnnouncementBody" data-lang="${lang}" data-collapsed="${collapsed ? 'true' : 'false'}">
         <div class="home-announcement-head">
-          <div>
-            <p class="home-announcement-kicker">MQTT</p>
-            <h2 id="homeAnnouncementTitle">
-              <span data-announcement-title="nl">Belangrijke migratie</span>
-              <span data-announcement-title="en">Important migration</span>
-            </h2>
+          <div class="home-announcement-head-left">
+            <img src="https://dutchmeshcore.nl/dmclogo.jpg" alt="DutchMeshCore" class="home-announcement-logo" />
+            <div>
+              <p class="home-announcement-kicker">MQTT</p>
+              <h2 id="homeAnnouncementTitle">
+                <span data-announcement-title="nl">Belangrijke migratie</span>
+                <span data-announcement-title="en">Important migration</span>
+              </h2>
+            </div>
           </div>
           <div class="home-announcement-controls">
             <div class="home-announcement-lang" role="group" aria-label="Announcement language">
@@ -190,8 +193,8 @@
           </div>
         </div>
         <div class="home-announcement-body" id="homeAnnouncementBody"${collapsed ? ' hidden' : ''}>
-          <p data-announcement-copy="nl">Heb jij jouw observers al omgezet naar de dutchmeshcore.nl servers? De Cornmeister MQTT komt binnenkort te vervallen.</p>
-          <p data-announcement-copy="en">Have you already moved your observers to the dutchmeshcore.nl servers? The Cornmeister MQTT server will be retired soon.</p>
+          <p data-announcement-copy="nl">Wij maken sinds kort gebruik van de MQTT servers van DutchMeshCore.nl, heb jij jouw observers al aangepast naar deze servers? De mqtt.cornmeister.nl gaat binnenkort met vervroegd pensioen.</p>
+          <p data-announcement-copy="en">We recently switched to the MQTT servers of DutchMeshCore.nl — have you already updated your observers to use these servers? mqtt.cornmeister.nl will be retiring soon.</p>
           <div class="home-announcement-actions">
             <a href="${DMC_URL}" target="_blank" rel="noopener" class="home-announcement-primary">
               <span data-announcement-action="nl">Klik hier voor meer info</span>
