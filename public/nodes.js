@@ -842,6 +842,9 @@
       });
 
     } catch (e) {
+      // #1150: surface a real error state in BOTH the back-row title and the body
+      // when /api/nodes/{pubkey} returns 404 (or any failure). Otherwise the title
+      // stays "Loading…" forever and there's no link back to the Nodes list.
       const msg = (e && e.message) || '';
       const is404 = /\b404\b/.test(msg) || /not\s*found/i.test(msg);
       const titleEl = document.querySelector('.node-full-title');

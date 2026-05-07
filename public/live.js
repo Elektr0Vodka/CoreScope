@@ -54,6 +54,15 @@
   }
   function setObserverIataMap(m) { observerIataMap = m || {}; }
 
+  /**
+   * Build observer_id → IATA map from the /api/observers response.
+   * The endpoint returns `{ observers: [...], server_time: "..." }`
+   * (cmd/server/types.go ObserverListResponse). Defensive: also accepts
+   * a bare array in case the API shape ever changes back, and ignores
+   * observers without an IATA. Returns a plain object (used as a hash).
+   * Exported for tests via window._liveBuildObserverIataMap.
+   * Fixes #1136 (regression introduced in #1080 which assumed array shape).
+   */
   function buildObserverIataMap(data) {
     var list = null;
     if (Array.isArray(data)) list = data;
