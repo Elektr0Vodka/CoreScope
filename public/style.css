@@ -482,9 +482,15 @@ input[type="week"] {
 .brand-logo {
   display: block;
   height: 36px;
-  width: 36px;
+  width: auto;
+  max-width: 125px;
   flex: 0 0 auto;
   max-height: 36px;
+  object-fit: contain;
+}
+.cornmeister-logo {
+  width: 36px;
+  max-width: 36px;
 }
 .brand-text {
   display: flex;
@@ -512,7 +518,7 @@ input[type="week"] {
 }
 .live-dot {
   width: 8px; height: 8px; border-radius: 50%; background: var(--text-muted);
-  display: inline-block; margin-left: 4px; transition: background .3s;
+  display: inline-block; flex: 0 0 8px; transition: background .3s;
 }
 @keyframes pulse-ring {
   0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.6); }
@@ -1504,7 +1510,8 @@ button.ch-item:hover .ch-icon-btn { opacity: 1; }
 @media (max-width: 900px) {
   .panel-right { width: 320px; min-width: 320px; }
   .nav-stats { display: none; }
-  .brand-logo { height: 32px; width: 32px; }
+  .brand-logo { height: 32px; max-height: 32px; }
+  .cornmeister-logo { width: 32px; max-width: 32px; }
   .brand-subtitle { display: none; }
   .nav-link { padding: 14px 8px; font-size: 13px; }
   .map-controls { width: 180px; font-size: 12px; }

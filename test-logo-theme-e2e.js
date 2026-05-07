@@ -60,6 +60,51 @@ async function main() {
   if (nav.gradients < 2) fail(`navbar Cornmeister gradient stops missing: ${JSON.stringify(nav)}`);
   if (nav.oldWordmark) fail('navbar still contains old CORE/SCOPE SVG wordmark');
 
+  for (const width of [1280, 900, 767, 390]) {
+    await page.setViewportSize({ width, height: 720 });
+    await page.waitForTimeout(50);
+    const layout = await page.evaluate(() => {
+      const logo = document.querySelector('.nav-brand .brand-logo');
+      const dot = document.querySelector('.nav-brand .live-dot');
+      const logoRect = logo && logo.getBoundingClientRect();
+      const dotRect = dot && dot.getBoundingClientRect();
+      return {
+        logoWidth: logoRect ? logoRect.width : 0,
+        logoHeight: logoRect ? logoRect.height : 0,
+        dotWidth: dotRect ? dotRect.width : 0,
+        gap: logoRect && dotRect ? dotRect.left - logoRect.right : -1,
+      };
+    });
+    if (layout.logoWidth < 31 || layout.logoWidth > 37 || layout.logoHeight < 31 || layout.logoHeight > 37) {
+      fail(`navbar logo did not keep a compact square size at ${width}px: ${JSON.stringify(layout)}`);
+    }
+    if (layout.dotWidth < 7.5 || layout.gap < 6) {
+      fail(`navbar live-dot too close to logo at ${width}px: ${JSON.stringify(layout)}`);
+    }
+  }
+
+  const imageLogoLayout = await page.evaluate(() => {
+    const root = document.querySelector('.nav-brand');
+    const oldLogo = root && root.querySelector('.brand-logo');
+    if (!root || !oldLogo) return null;
+    const img = document.createElement('img');
+    img.className = 'brand-logo';
+    img.setAttribute('width', '240');
+    img.setAttribute('height', '72');
+    img.src = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 72"><rect width="240" height="72" fill="blue"/></svg>');
+    oldLogo.replaceWith(img);
+    const logoRect = img.getBoundingClientRect();
+    const dotRect = root.querySelector('.live-dot').getBoundingClientRect();
+    return {
+      logoWidth: logoRect.width,
+      logoHeight: logoRect.height,
+      gap: dotRect.left - logoRect.right,
+    };
+  });
+  if (!imageLogoLayout || imageLogoLayout.logoWidth <= imageLogoLayout.logoHeight || imageLogoLayout.logoWidth > 125 || imageLogoLayout.gap < 6) {
+    fail(`navbar image logo scaling regressed: ${JSON.stringify(imageLogoLayout)}`);
+  }
+
   await page.evaluate(() => { window.location.hash = '#/home'; });
   await page.waitForFunction(() => location.hash === '#/home');
   await page.waitForSelector('.home-hero svg.home-hero-logo.cornmeister-logo');
