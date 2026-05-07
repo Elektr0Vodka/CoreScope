@@ -19,6 +19,7 @@
   let affinityData = null;
   let userHasMoved = false;
   let controlsCollapsed = false;
+  var _popupClosedByUser = false;
 
   // Safe escape — falls back to identity if app.js hasn't loaded yet
   const safeEsc = (typeof esc === 'function') ? esc : function (s) { return s; };
@@ -236,6 +237,13 @@
       _zoomResizeTimer = setTimeout(() => {
         if (!_renderingMarkers) _repositionMarkers();
       }, 150);
+    });
+
+    map.on('popupclose', function () {
+      if (!_renderingMarkers) _popupClosedByUser = true;
+    });
+    map.on('popupopen', function () {
+      if (!_renderingMarkers) _popupClosedByUser = false;
     });
 
     markerLayer = L.layerGroup().addTo(map);
@@ -844,10 +852,13 @@
     if (_renderingMarkers) return;
     _renderingMarkers = true;
     try {
-      var popupState = _captureOpenMarkerPopup(map);
+      var popupState = _popupClosedByUser ? null : _captureOpenMarkerPopup(map);
       _renderMarkersInner();
       _restoreOpenMarkerPopup(popupState, markerLayer, clusterGroup);
-    } finally { _renderingMarkers = false; }
+    } finally {
+      _popupClosedByUser = false;
+      _renderingMarkers = false;
+    }
   }
 
   function _captureOpenMarkerPopup(mapRef) {
