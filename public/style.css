@@ -477,7 +477,13 @@ input[type="week"] {
   flex-wrap: nowrap; overflow: visible; min-width: 0;
 }
 .nav-left { display: flex; align-items: center; gap: var(--space-lg); min-width: 0; flex-shrink: 1; overflow: hidden; }
-.nav-brand { display: flex; align-items: center; gap: var(--space-sm); text-decoration: none; color: var(--nav-text); font-weight: 700; font-size: var(--fs-md); min-width: 0; }
+.nav-brand {
+  display: flex; align-items: center; gap: 10px;
+  text-decoration: none; color: var(--nav-text);
+  font-weight: 700; font-size: var(--fs-md);
+  flex: 0 0 auto;
+  min-width: max-content;
+}
 .brand-icon { font-size: 20px; }
 .brand-logo {
   display: block;
@@ -495,18 +501,19 @@ input[type="week"] {
 .brand-text {
   display: flex;
   flex-direction: column;
-  min-width: 0;
+  flex: 0 0 auto;
+  min-width: max-content;
   line-height: 1.05;
 }
 .brand-title {
   color: var(--nav-text);
-  font-size: .82rem;
+  font-size: .88rem;
   letter-spacing: .04em;
   white-space: nowrap;
 }
 .brand-subtitle {
   color: var(--nav-text-muted);
-  font-size: .62rem;
+  font-size: .64rem;
   font-weight: 500;
   white-space: nowrap;
 }

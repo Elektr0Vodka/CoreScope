@@ -25,6 +25,8 @@ mustInclude("key: 'writeObsRate'", 'observation write rate dataset');
 mustInclude("key: 'writeErrorRate'", 'write error rate dataset');
 
 mustInclude('function writeSourceRates(writeSources)', 'write source rate helper');
+mustInclude('const DETAIL_REFRESH_MS = 30000', 'detail endpoint throttle');
+mustInclude('async function loadPerfDetails()', 'throttled detail loader');
 mustInclude('pushSample(server, server.observerCounts || null, ioStats, sqliteStats, writeSources)', 'refresh IO sample wiring');
 
 const diskChart = src.match(/id: 'diskio'[\s\S]*?datasets: \[([\s\S]*?)\]\s*\}/);

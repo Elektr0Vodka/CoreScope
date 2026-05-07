@@ -66,13 +66,29 @@ async function main() {
     const layout = await page.evaluate(() => {
       const logo = document.querySelector('.nav-brand .brand-logo');
       const dot = document.querySelector('.nav-brand .live-dot');
+      const brand = document.querySelector('.nav-brand');
+      const text = document.querySelector('.nav-brand .brand-text');
+      const title = document.querySelector('.nav-brand .brand-title');
+      const firstLink = document.querySelector('.nav-links .nav-link:not(.is-overflow)');
       const logoRect = logo && logo.getBoundingClientRect();
       const dotRect = dot && dot.getBoundingClientRect();
+      const brandRect = brand && brand.getBoundingClientRect();
+      const textRect = text && text.getBoundingClientRect();
+      const titleStyle = title && getComputedStyle(title);
+      const textStyle = text && getComputedStyle(text);
+      const firstLinkRect = firstLink && firstLink.getBoundingClientRect();
       return {
         logoWidth: logoRect ? logoRect.width : 0,
         logoHeight: logoRect ? logoRect.height : 0,
         dotWidth: dotRect ? dotRect.width : 0,
         gap: logoRect && dotRect ? dotRect.left - logoRect.right : -1,
+        titleVisible: !!(titleStyle && titleStyle.display !== 'none' && textStyle && textStyle.display !== 'none'),
+        titleWidth: title ? title.getBoundingClientRect().width : 0,
+        titleScrollWidth: title ? title.scrollWidth : 0,
+        textWidth: textRect ? textRect.width : 0,
+        textScrollWidth: text ? text.scrollWidth : 0,
+        brandRight: brandRect ? brandRect.right : 0,
+        firstLinkLeft: firstLinkRect ? firstLinkRect.left : 0,
       };
     });
     if (layout.logoWidth < 31 || layout.logoWidth > 37 || layout.logoHeight < 31 || layout.logoHeight > 37) {
@@ -80,6 +96,12 @@ async function main() {
     }
     if (layout.dotWidth < 7.5 || layout.gap < 6) {
       fail(`navbar live-dot too close to logo at ${width}px: ${JSON.stringify(layout)}`);
+    }
+    if (layout.titleVisible && (layout.textWidth + 1 < layout.textScrollWidth || layout.titleWidth + 1 < layout.titleScrollWidth)) {
+      fail(`navbar brand text is clipped/squeezed at ${width}px: ${JSON.stringify(layout)}`);
+    }
+    if (layout.firstLinkLeft && layout.firstLinkLeft + 0.5 < layout.brandRight) {
+      fail(`navbar brand overlaps first nav link at ${width}px: ${JSON.stringify(layout)}`);
     }
   }
 

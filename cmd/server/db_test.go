@@ -257,6 +257,34 @@ func TestGetDBSizeStats(t *testing.T) {
 	}
 }
 
+func TestGetDBSizeStatsTypedUsesShortCache(t *testing.T) {
+	db := setupTestDB(t)
+	defer db.Close()
+	seedTestData(t, db)
+
+	first := db.GetDBSizeStatsTyped()
+	if first.Rows == nil || first.Rows.Transmissions != 3 {
+		t.Fatalf("expected initial typed stats to report 3 transmissions, got %+v", first.Rows)
+	}
+
+	db.conn.Exec(`INSERT INTO transmissions (raw_hex, hash, first_seen, route_type, payload_type)
+		VALUES ('EEFF', 'cachetest1234567', ?, 1, 4)`, time.Now().UTC().Format(time.RFC3339))
+
+	cached := db.GetDBSizeStatsTyped()
+	if cached.Rows == nil || cached.Rows.Transmissions != 3 {
+		t.Fatalf("expected cached typed stats to avoid immediate recount, got %+v", cached.Rows)
+	}
+
+	db.sqliteStatsCacheMu.Lock()
+	db.sqliteStatsCacheExp = time.Now().Add(-time.Second)
+	db.sqliteStatsCacheMu.Unlock()
+
+	refreshed := db.GetDBSizeStatsTyped()
+	if refreshed.Rows == nil || refreshed.Rows.Transmissions != 4 {
+		t.Fatalf("expected expired typed stats cache to refresh to 4 transmissions, got %+v", refreshed.Rows)
+	}
+}
+
 func TestQueryPackets(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()

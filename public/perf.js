@@ -9,6 +9,8 @@
   // Long : 1 min resolution, 48 h max (2880 samples) → 6h / 12h / 24h / 48h views
   const MAX_SAMPLES      = 720;
   const MAX_LONG_SAMPLES = 2880;
+  const REFRESH_MS       = 5000;
+  const DETAIL_REFRESH_MS = 30000;
   const HISTORY_KEY      = 'cs-perf-history';
   const LONG_HISTORY_KEY = 'cs-perf-history-long';
   const history          = [];
@@ -46,6 +48,8 @@
   let timeframe = localStorage.getItem('perf-timeframe') || '5m';
   let activeCharts = []; // [{ chart: Chart, id: string, datasets: [{key,label,color}] }]
   let lastWriteSourceSample = null; // { sources, atMs } for per-second graph rates
+  let detailCache = { at: 0, ioStats: null, sqliteStats: null, writeSources: null };
+  let healthCache = { at: 0, data: null };
 
   // Charts grouped by category. Multi-entry datasets render as multi-line charts with a legend.
   const CHART_GROUPS = [
@@ -332,18 +336,39 @@
   }
 
   // --- Polling refresh ---
+  async function loadPerfDetails() {
+    const now = Date.now();
+    if (now - detailCache.at < DETAIL_REFRESH_MS) return detailCache;
+    const [ioStats, sqliteStats, writeSources] = await Promise.all([
+      fetch('/api/perf/io').then(r => r.json()).catch(() => null),
+      fetch('/api/perf/sqlite').then(r => r.json()).catch(() => null),
+      fetch('/api/perf/write-sources').then(r => r.json()).catch(() => null)
+    ]);
+    detailCache = { at: now, ioStats: ioStats, sqliteStats: sqliteStats, writeSources: writeSources };
+    return detailCache;
+  }
+
+  async function loadHealthForCards() {
+    const now = Date.now();
+    if (now - healthCache.at < DETAIL_REFRESH_MS) return healthCache.data;
+    const data = await fetch('/api/health').then(r => r.json()).catch(() => null);
+    healthCache = { at: now, data: data };
+    return data;
+  }
+
   async function refresh() {
     var el = document.getElementById('perfContent');
     if (!el) return;
     try {
-      const [server, client, ioStats, sqliteStats, writeSources] = await Promise.all([
+      const [server, client, details] = await Promise.all([
         fetch('/api/perf').then(r => r.json()),
         Promise.resolve(window.apiPerf ? window.apiPerf() : null),
-        fetch('/api/perf/io').then(r => r.json()).catch(() => null),
-        fetch('/api/perf/sqlite').then(r => r.json()).catch(() => null),
-        fetch('/api/perf/write-sources').then(r => r.json()).catch(() => null)
+        loadPerfDetails()
       ]);
-      const health = await fetch('/api/health').then(r => r.json()).catch(() => null);
+      const ioStats = details.ioStats;
+      const sqliteStats = details.sqliteStats;
+      const writeSources = details.writeSources;
+      const health = viewMode === 'cards' ? await loadHealthForCards() : healthCache.data;
 
       pushSample(server, server.observerCounts || null, ioStats, sqliteStats, writeSources);
 
@@ -678,7 +703,7 @@
   registerPage('perf', {
     init(app) {
       render(app);
-      interval = setInterval(refresh, 5000);
+      interval = setInterval(refresh, REFRESH_MS);
     },
     destroy() {
       destroyCharts();

@@ -28,7 +28,13 @@ type DB struct {
 	channelsCacheKey string
 	channelsCacheRes []map[string]interface{}
 	channelsCacheExp time.Time
+
+	sqliteStatsCacheMu  sync.Mutex
+	sqliteStatsCache    SqliteStats
+	sqliteStatsCacheExp time.Time
 }
+
+const sqliteStatsCacheTTL = 15 * time.Second
 
 // OpenDB opens a read-only SQLite connection with WAL mode.
 func OpenDB(path string) (*DB, error) {
@@ -322,6 +328,15 @@ func (db *DB) GetDBSizeStats() map[string]interface{} {
 
 // GetDBSizeStatsTyped returns SQLite file sizes and row counts as a typed struct.
 func (db *DB) GetDBSizeStatsTyped() SqliteStats {
+	now := time.Now()
+	db.sqliteStatsCacheMu.Lock()
+	if now.Before(db.sqliteStatsCacheExp) {
+		cached := cloneSqliteStats(db.sqliteStatsCache)
+		db.sqliteStatsCacheMu.Unlock()
+		return cached
+	}
+	db.sqliteStatsCacheMu.Unlock()
+
 	result := SqliteStats{}
 
 	if db.path != "" && db.path != ":memory:" {
@@ -370,7 +385,25 @@ func (db *DB) GetDBSizeStatsTyped() SqliteStats {
 	}
 	result.Rows = rows
 
+	db.sqliteStatsCacheMu.Lock()
+	db.sqliteStatsCache = cloneSqliteStats(result)
+	db.sqliteStatsCacheExp = now.Add(sqliteStatsCacheTTL)
+	db.sqliteStatsCacheMu.Unlock()
+
 	return result
+}
+
+func cloneSqliteStats(in SqliteStats) SqliteStats {
+	out := in
+	if in.WalPages != nil {
+		wp := *in.WalPages
+		out.WalPages = &wp
+	}
+	if in.Rows != nil {
+		rows := *in.Rows
+		out.Rows = &rows
+	}
+	return out
 }
 
 // GetRoleCounts returns count per role (7-day active, matching Node.js /api/stats).
