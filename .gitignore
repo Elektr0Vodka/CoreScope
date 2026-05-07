@@ -32,3 +32,4 @@ cmd/ingestor/ingestor.exe
 corescope-server
 cmd/server/server
 /.claude
+_wt-*
