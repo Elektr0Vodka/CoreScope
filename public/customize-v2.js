@@ -591,7 +591,7 @@
       if (br.siteName) {
         document.title = br.siteName;
         _setBrandAlt(br.siteName);
-        var brandEl = document.querySelector('.brand-text');
+        var brandEl = document.querySelector('.brand-title') || document.querySelector('.brand-text');
         if (brandEl) brandEl.textContent = br.siteName;
       }
       if (br.logoUrl) {
@@ -1409,7 +1409,7 @@
           // Live branding updates
           if (section === 'branding' && key === 'siteName') {
             _setBrandAlt(inp.value);
-            var el = document.querySelector('.brand-text');
+            var el = document.querySelector('.brand-title') || document.querySelector('.brand-text');
             if (el) el.textContent = inp.value;
             document.title = inp.value;
           }
@@ -1683,7 +1683,7 @@
     if (overrides.branding) {
       if (overrides.branding.siteName) {
         _setBrandAlt(overrides.branding.siteName);
-        var brandEl = document.querySelector('.brand-text');
+        var brandEl = document.querySelector('.brand-title') || document.querySelector('.brand-text');
         if (brandEl) brandEl.textContent = overrides.branding.siteName;
         document.title = overrides.branding.siteName;
       }

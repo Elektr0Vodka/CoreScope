@@ -34,10 +34,17 @@
 .home-hero-brand {
   margin: 0 0 14px;
 }
+.home-hero-logo {
+  display: block;
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 8px;
+}
 .home-hero-brand-name {
   font: 700 1.5rem/1.2 var(--font);
   color: var(--text);
   margin: 0 0 2px;
+  letter-spacing: .04em;
 }
 .home-hero-brand-subtitle {
   color: var(--text-muted);

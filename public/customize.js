@@ -1041,7 +1041,7 @@
           // Legacy .brand-text fallback retained for any operator who shipped
           // a custom build that still uses the text node.
           _v1SetBrandAlt(inp.value);
-          var brandEl = document.querySelector('.brand-text');
+          var brandEl = document.querySelector('.brand-title') || document.querySelector('.brand-text');
           if (brandEl) brandEl.textContent = inp.value;
           document.title = inp.value;
         }
@@ -1479,7 +1479,7 @@
         if (userTheme.branding) {
           if (userTheme.branding.siteName) {
             _v1SetBrandAlt(userTheme.branding.siteName);
-            const brandEl = document.querySelector('.brand-text');
+            const brandEl = document.querySelector('.brand-title') || document.querySelector('.brand-text');
             if (brandEl) brandEl.textContent = userTheme.branding.siteName;
             document.title = userTheme.branding.siteName;
           }

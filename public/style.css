@@ -128,22 +128,9 @@
   --input-bg: #fff;
   --selected-bg: #dbeafe;
 
-  /* --- Logo theme tokens (PR #1137) ------------------------
-   * The CoreScope SVG logos are inlined into the DOM (navbar +
-   * home hero), so they inherit page CSS custom properties. The
-   * legacy --logo-* names are kept so existing themes / brand
-   * customizations that override them still work; defaults map
-   * to the active theme so wordmark/arc colors track --accent /
-   * --nav-text / --text-muted on light AND dark themes.
-   *   --logo-text   → wordmark "CORE" / "SCOPE" / labels
-   *   --logo-accent → primary node + left-side arcs (default --accent)
-   *   --logo-accent-hi → secondary node + right-side arcs (default --accent-hover)
-   *   --logo-muted  → tagline + sine wave
-   * No --logo-bg here on purpose — the inlined SVGs MUST be
-   * transparent so they sit on whatever bg the page paints.
-   * --logo-text defaults to --text (the page foreground) so the
-   * hero wordmark is readable on any theme; the navbar scopes it
-   * to --nav-text below so it stays white on the dark navbar. */
+  /* Legacy logo tokens retained for operator themes and old exported
+   * CoreScope SVG assets. The default UI now uses the Cornmeister
+   * Toolbox radio-node mark with fixed blue gradient stops. */
   --logo-text: var(--text);
   --logo-accent: var(--accent);
   --logo-accent-hi: var(--accent-hover);
@@ -490,32 +477,34 @@ input[type="week"] {
   flex-wrap: nowrap; overflow: visible; min-width: 0;
 }
 .nav-left { display: flex; align-items: center; gap: var(--space-lg); min-width: 0; flex-shrink: 1; overflow: hidden; }
-.nav-brand { display: flex; align-items: center; gap: var(--space-sm); text-decoration: none; color: var(--nav-text); font-weight: 700; font-size: var(--fs-md); }
+.nav-brand { display: flex; align-items: center; gap: var(--space-sm); text-decoration: none; color: var(--nav-text); font-weight: 700; font-size: var(--fs-md); min-width: 0; }
 .brand-icon { font-size: 20px; }
 .brand-logo {
   display: block;
   height: 36px;
-  /* Width matches the inline SVG's effective content aspect (~3.08:1)
-     after cropping to the wordmark+nodes region in the navbar viewBox.
-       /* Pinned to match the SVG intrinsic width (#1141 followup: viewBox
-     widened to 150 10 970 280 to fit CORE/SCOPE wordmark; intrinsic
-     width 125 keeps the text legible at the same ~36px height). */
-  width: 125px;
+  width: 36px;
+  flex: 0 0 auto;
   max-height: 36px;
-  /* The logo is inlined into the DOM (PR #1137) so it inherits page
-     CSS variables; theme via --logo-text / --logo-accent / etc. defined
-     in :root above. The .top-nav scope below overrides --logo-text to
-     --nav-text so the wordmark stays readable on the dark navbar even
-     when the page theme is Light. */
 }
-.top-nav {
-  /* Navbar lives on --nav-bg (typically dark), so the brand wordmark
-     must use --nav-text rather than the page --text default. */
-  --logo-text: var(--nav-text);
+.brand-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.05;
 }
-/* Mark-only navbar logo: hidden by default, swapped in for the full
-   wordmark logo at narrow viewports where SCOPE would otherwise clip
-   (#1137 mobile width pin was 99px → SCOPE→SCOF at ≤390px). */
+.brand-title {
+  color: var(--nav-text);
+  font-size: .82rem;
+  letter-spacing: .04em;
+  white-space: nowrap;
+}
+.brand-subtitle {
+  color: var(--nav-text-muted);
+  font-size: .62rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+/* Legacy mark-only hook retained for older operator overrides. */
 .brand-mark-only {
   display: none;
   height: 32px;
@@ -1515,18 +1504,15 @@ button.ch-item:hover .ch-icon-btn { opacity: 1; }
 @media (max-width: 900px) {
   .panel-right { width: 320px; min-width: 320px; }
   .nav-stats { display: none; }
-  .brand-logo { height: 32px; width: 112px; }
+  .brand-logo { height: 32px; width: 32px; }
+  .brand-subtitle { display: none; }
   .nav-link { padding: 14px 8px; font-size: 13px; }
   .map-controls { width: 180px; font-size: 12px; }
 }
 
-/* === Responsive — Mobile (≤400px) ===
-   At narrow viewports the inline wordmark SVG (intrinsic 111px content)
-   clips when squeezed into the 99px tablet pin (#1137 → SCOPE→SCOF).
-   Swap to the dedicated .brand-mark-only inline SVG (arcs+dots only). */
+/* === Responsive — Mobile (≤400px) === */
 @media (max-width: 400px) {
-  .brand-logo { display: none; }
-  .brand-mark-only { display: block; }
+  .brand-title { display: none; }
 }
 
 /* #1057: Container query — stack the channels layout when the channels

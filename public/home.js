@@ -73,9 +73,24 @@
 
     container.innerHTML = `
       <section class="home-hero">
-        <div class="home-hero-brand" aria-label="CORNMEISTER.NL Dutch Mesh Analyzer">
+        <div class="home-hero-brand" aria-label="CORNMEISTER.NL Dutch mesh analyzer">
+          <svg class="home-hero-logo cornmeister-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="64" height="64" role="img" aria-label="Cornmeister logo">
+            <defs>
+              <linearGradient id="cornmeisterHomeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#3b82f6" stop-opacity="1" />
+                <stop offset="100%" stop-color="#1d4ed8" stop-opacity="1" />
+              </linearGradient>
+            </defs>
+            <circle cx="50" cy="50" r="6" fill="url(#cornmeisterHomeGrad)" />
+            <path d="M 57.5 37 A 15 15 0 0 1 57.5 63" fill="none" stroke="url(#cornmeisterHomeGrad)" stroke-width="5" stroke-linecap="round"><animate attributeName="opacity" values="0.4;1;0.4" dur="1.5s" begin="0s" repeatCount="indefinite" /></path>
+            <path d="M 42.5 37 A 15 15 0 0 0 42.5 63" fill="none" stroke="url(#cornmeisterHomeGrad)" stroke-width="5" stroke-linecap="round"><animate attributeName="opacity" values="0.4;1;0.4" dur="1.5s" begin="0s" repeatCount="indefinite" /></path>
+            <path d="M 63.5 26.6 A 27 27 0 0 1 63.5 73.4" fill="none" stroke="url(#cornmeisterHomeGrad)" stroke-width="5" stroke-linecap="round"><animate attributeName="opacity" values="0.4;1;0.4" dur="1.5s" begin="0.5s" repeatCount="indefinite" /></path>
+            <path d="M 36.5 26.6 A 27 27 0 0 0 36.5 73.4" fill="none" stroke="url(#cornmeisterHomeGrad)" stroke-width="5" stroke-linecap="round"><animate attributeName="opacity" values="0.4;1;0.4" dur="1.5s" begin="0.5s" repeatCount="indefinite" /></path>
+            <path d="M 69.5 16.2 A 39 39 0 0 1 69.5 83.8" fill="none" stroke="url(#cornmeisterHomeGrad)" stroke-width="5" stroke-linecap="round"><animate attributeName="opacity" values="0.4;1;0.4" dur="1.5s" begin="1s" repeatCount="indefinite" /></path>
+            <path d="M 30.5 16.2 A 39 39 0 0 0 30.5 83.8" fill="none" stroke="url(#cornmeisterHomeGrad)" stroke-width="5" stroke-linecap="round"><animate attributeName="opacity" values="0.4;1;0.4" dur="1.5s" begin="1s" repeatCount="indefinite" /></path>
+          </svg>
           <div class="home-hero-brand-name">CORNMEISTER.NL</div>
-          <div class="home-hero-brand-subtitle">Dutch Mesh Analyzer</div>
+          <div class="home-hero-brand-subtitle">Dutch mesh analyzer</div>
         </div>
         <h1>${hasNodes ? 'My Mesh' : escapeHtml(homeCfg?.heroTitle || siteName)}</h1>
         <p>${hasNodes ? 'Your nodes at a glance. Add more by searching below.' : escapeHtml(homeCfg?.heroSubtitle || 'Find your nodes to start monitoring them.')}</p>
